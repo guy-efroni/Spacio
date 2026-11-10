@@ -1,0 +1,17 @@
+# Spacio Client Rules (Angular 22 & Three.js)
+
+## 1. Directory Structure
+Enforce strict separation within `src/app/`:
+- `core/`: Singleton services (WebSocket client, camera orchestration, authentication, global app state).
+- `shared/`: Reusable UI controls, 3D math utilities, shared interfaces, and standalone pipes/directives.
+- `features/`: Isolated domain modules (e.g., `viewport`, `blueprint-editor`, `room-walkthrough`).
+
+## 2. Angular 22 Coding Standards
+- **Standalone Only:** All components, directives, and pipes must be standalone (`standalone: true`). Never introduce `NgModules`.
+- **Reactivity & Signals:** Manage component local and reactive state using Angular Signals (`signal()`, `computed()`, `input()`, `output()`). Use RxJS exclusively for HTTP streams and WebSocket event pipelines.
+- **Dependency Injection:** Use the modern `inject(ServiceClass)` syntax instead of constructor parameter injection.
+- **Control Flow:** Use modern `@if`, `@else`, `@for`, and `@switch` template syntax. Never use `*ngIf` or `*ngFor`.
+
+## 3. Three.js & WebGL Rules
+- **DOM & Lifecycle Safety:** Restrict canvas creation, WebGL context acquisition, and Three.js scene initializations to `afterNextRender` lifecycle hooks to keep client-side rendering clean.
+- **Render Loop Optimization:** Run `requestAnimationFrame` render loops outside the Angular detection zone using `NgZone.runOutsideAngular()` to guarantee an uninhibited 60 FPS.

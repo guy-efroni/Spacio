@@ -1,0 +1,7 @@
+{
+  "instructions": [
+    ".kilorules",
+    "spacio-client/.kilorules",
+    "spacio-server/.kilorules"
+  ]
+}
