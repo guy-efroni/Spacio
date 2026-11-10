@@ -1,0 +1,16 @@
+# Spacio - Root Monorepo & Architectural Rules
+
+## 1. Monorepo & Domain Architecture
+- **Workspace Layout:**
+  - `spacio-client/`: Standalone Angular 22 frontend + Three.js WebGL studio.
+  - `spacio-server/`: NestJS 12 backend + Socket.io gateway + Redis pub/sub.
+- **Layering Standards:** Both projects must enforce a strict separation between singletons (`core/`), shared models/contracts (`shared/`), and domain modules (`features/` or `modules/`).
+
+## 2. Strict Type Safety (Zero Tolerance for `any` / `unknown`)
+- **No Type Escape Hatches:** Never use `any`, `unknown`, or loose type assertions (`as any`).
+- **Explicit Contracts:** Every function signature, component property, state signal, DTO, and WebSocket event payload MUST have an explicit, strongly typed TypeScript interface or type alias.
+- **3D & Canvas Specs:** Wrap Three.js objects (meshes, geometries, materials, transformation matrices) in typed domain structures rather than raw untyped object dictionaries.
+
+## 3. General Code Hygiene
+- **Imports:** Use absolute paths configured via TypeScript path aliases (`@core/*`, `@shared/*`, `@features/*`).
+- **Git Safety:** Never log secrets, environment variables, or write sensitive data to client/server logs.
