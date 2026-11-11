@@ -11,3 +11,6 @@ Enforce strict separation within `src/`:
 - **Strongly Typed Payloads:** Validate all incoming WebSocket payloads and REST requests using `class-validator` and `class-transformer` decorated DTOs.
 - **Modular Gateways:** Keep Socket.io event listener methods lean by delegating transformation, spatial validation, and state persistence to injected domain services.
 - **Stateless Cloud Design:** Keep server memory lean and stateless to support deployment on Render free-tier infrastructure using Redis for room state distribution.
+
+## 3. Naming Conventions
+- **Private members:** Prefix every private property and method name with `_` (e.g., `_renderer`, `_setupScene()`).
