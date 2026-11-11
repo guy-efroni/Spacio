@@ -1,10 +1,10 @@
-import { WallSegment } from '../geometry/wall.interface';
-import { PlacedObject } from '../furniture/placed-object.interface';
+import { IWallSegment } from '../geometry/wall.interface';
+import { IPlacedObject } from '../furniture/placed-object.interface';
 
-export interface RoomData {
+export interface IRoomData {
   version: string;
   name: string;
-  walls: WallSegment[];
-  objects: PlacedObject[];
+  walls: IWallSegment[];
+  objects: IPlacedObject[];
   updatedAt: number;
 }

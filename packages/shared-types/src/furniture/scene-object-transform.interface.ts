@@ -1,8 +1,8 @@
-import { Vector3D } from '../geometry/vector3d.interface';
-import { EulerRotation } from '../geometry/euler-rotation.interface';
+import { IVector3D } from '../geometry/vector3d.interface';
+import { IEulerRotation } from '../geometry/euler-rotation.interface';
 
-export interface SceneObjectTransform {
-  position: Vector3D;
-  rotation: EulerRotation;
-  scale: Vector3D;
+export interface ISceneObjectTransform {
+  position: IVector3D;
+  rotation: IEulerRotation;
+  scale: IVector3D;
 }

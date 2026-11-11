@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import * as THREE from 'three';
-import { WallSegment } from '@spacio/shared-types';
+import { IWallSegment } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 
 @Component({
@@ -128,7 +128,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     plane.receiveShadow = true;
     this._scene.add(plane);
 
-    const walls: WallSegment[] = this._createSampleWalls();
+    const walls: IWallSegment[] = this._createSampleWalls();
     const wallsMesh: THREE.Group = WallExtruder.createWallsMesh(walls);
     this._scene.add(wallsMesh);
   }
@@ -172,7 +172,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     this._renderer.setSize(width, height, false);
   }
 
-  private _createSampleWalls(): WallSegment[] {
+  private _createSampleWalls(): IWallSegment[] {
     return [
       {
         id: 'wall-1',

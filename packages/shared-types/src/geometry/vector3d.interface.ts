@@ -1,4 +1,4 @@
-export interface Vector3D {
+export interface IVector3D {
   x: number;
   y: number;
   z: number;

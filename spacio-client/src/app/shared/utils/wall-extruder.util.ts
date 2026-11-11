@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { WallSegment } from '@spacio/shared-types';
+import { IWallSegment } from '@spacio/shared-types';
 
 export class WallExtruder {
   private constructor() {}
 
-  public static createWallsMesh(walls: ReadonlyArray<WallSegment>): THREE.Group {
+  public static createWallsMesh(walls: ReadonlyArray<IWallSegment>): THREE.Group {
     const group: THREE.Group = new THREE.Group();
     group.name = 'walls';
 
@@ -19,7 +19,7 @@ export class WallExtruder {
     });
 
     for (const wall of walls) {
-      const { start, end, height, thickness }: WallSegment = wall;
+      const { start, end, height, thickness }: IWallSegment = wall;
 
       const length: number = Math.hypot(end.x - start.x, end.y - start.y);
       if (length <= 0) {

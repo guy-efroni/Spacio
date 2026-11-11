@@ -1,7 +1,7 @@
-import { SceneObjectTransform } from './scene-object-transform.interface';
+import { ISceneObjectTransform } from './scene-object-transform.interface';
 
-export interface PlacedObject {
+export interface IPlacedObject {
   id: string;
   modelId: string;
-  transform: SceneObjectTransform;
+  transform: ISceneObjectTransform;
 }
