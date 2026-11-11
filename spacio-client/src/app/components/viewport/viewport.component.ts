@@ -15,27 +15,8 @@ import * as THREE from 'three';
 @Component({
   selector: 'app-viewport',
   standalone: true,
-  template: `
-    <div #container class="viewport-container">
-      <canvas #canvas></canvas>
-    </div>
-  `,
-  styles: [
-    `
-      .viewport-container {
-        width: 100%;
-        height: 100vh;
-        overflow: hidden;
-        position: relative;
-      }
-
-      .viewport-container canvas {
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
-    `,
-  ],
+  templateUrl: './viewport.component.html',
+  styleUrl: './viewport.component.scss',
 })
 export class ViewportComponent implements AfterViewInit, OnDestroy {
   private readonly ngZone = inject(NgZone);

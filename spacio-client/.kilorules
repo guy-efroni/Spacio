@@ -11,6 +11,7 @@ Enforce strict separation within `src/app/`:
 - **Reactivity & Signals:** Manage component local and reactive state using Angular Signals (`signal()`, `computed()`, `input()`, `output()`). Use RxJS exclusively for HTTP streams and WebSocket event pipelines.
 - **Dependency Injection:** Use the modern `inject(ServiceClass)` syntax instead of constructor parameter injection.
 - **Control Flow:** Use modern `@if`, `@else`, `@for`, and `@switch` template syntax. Never use `*ngIf` or `*ngFor`.
+- **Template & Style Separation:** Templates MUST use external `.html` files via `templateUrl`. Styles MUST use external `.scss` files via `styleUrl`. Never use inline `template` or `styles` arrays in `@Component` decorators.
 
 ## 3. Three.js & WebGL Rules
 - **DOM & Lifecycle Safety:** Restrict canvas creation, WebGL context acquisition, and Three.js scene initializations to `afterNextRender` lifecycle hooks to keep client-side rendering clean.
