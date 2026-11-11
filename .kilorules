@@ -14,3 +14,9 @@
 ## 3. General Code Hygiene
 - **Imports:** Use absolute paths configured via TypeScript path aliases (`@core/*`, `@shared/*`, `@features/*`).
 - **Git Safety:** Never log secrets, environment variables, or write sensitive data to client/server logs.
+
+## 4. Shared Types Barrel Pattern
+- **Single Responsibility Files:** Each shared interface or type definition must reside in its own domain file inside `packages/shared-types/src/<domain>/<name>.interface.ts`.
+- **No Monolithic Files:** Never add new interfaces directly to `src/index.ts`. All new types must be placed in their appropriate domain subfolder and re-exported through the index barrel.
+- **Domain Separation:** Explicitly separate geometric/3D viewport types, project metadata, and user/app state types under `geometry/`, `project/`, and `furniture/` respectively.
+- **Clean Barrel Exports:** `packages/shared-types/src/index.ts` must contain exclusively `export *` statements—no logic, values, or type definitions are permitted inside `index.ts`.
