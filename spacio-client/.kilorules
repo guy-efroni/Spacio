@@ -16,3 +16,6 @@ Enforce strict separation within `src/app/`:
 ## 3. Three.js & WebGL Rules
 - **DOM & Lifecycle Safety:** Restrict canvas creation, WebGL context acquisition, and Three.js scene initializations to `afterNextRender` lifecycle hooks to keep client-side rendering clean.
 - **Render Loop Optimization:** Run `requestAnimationFrame` render loops outside the Angular detection zone using `NgZone.runOutsideAngular()` to guarantee an uninhibited 60 FPS.
+
+## 4. Naming Conventions
+- **Private members:** Prefix every private property and method name with `_` (e.g., `_renderer`, `_setupScene()`).

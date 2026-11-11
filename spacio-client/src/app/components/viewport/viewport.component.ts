@@ -19,17 +19,17 @@ import * as THREE from 'three';
   styleUrl: './viewport.component.scss',
 })
 export class ViewportComponent implements AfterViewInit, OnDestroy {
-  private readonly ngZone = inject(NgZone);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly _ngZone: NgZone = inject(NgZone);
+  private readonly _destroyRef: DestroyRef = inject(DestroyRef);
 
-  protected readonly containerRef = viewChild.required<HTMLElement>('container');
-  protected readonly canvasRef = viewChild.required<HTMLCanvasElement>('canvas');
+  protected readonly containerRef: Signal<HTMLElement> = viewChild.required<HTMLElement>('container');
+  protected readonly canvasRef: Signal<HTMLCanvasElement> = viewChild.required<HTMLCanvasElement>('canvas');
 
-  private renderer?: THREE.WebGLRenderer;
-  private scene?: THREE.Scene;
-  private camera?: THREE.PerspectiveCamera;
-  private animationFrameId?: number;
-  private resizeObserver?: ResizeObserver;
+  private _renderer?: THREE.WebGLRenderer;
+  private _scene?: THREE.Scene;
+  private _camera?: THREE.PerspectiveCamera;
+  private _animationFrameId?: number;
+  private _resizeObserver?: ResizeObserver;
 
   ngAfterViewInit(): void {
     afterNextRender(() => {
@@ -44,51 +44,51 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeThreeJS(): void {
-    const canvas = this.canvasRef();
-    const container = this.containerRef();
+    const canvas: HTMLCanvasElement = this.canvasRef();
+    const container: HTMLElement = this.containerRef();
 
-    this.renderer = new THREE.WebGLRenderer({
+    this._renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
       alpha: false,
       powerPreference: 'high-performance',
     });
 
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this._renderer.setSize(container.clientWidth, container.clientHeight);
+    this._renderer.shadowMap.enabled = true;
+    this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this._renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this._renderer.toneMappingExposure = 1.0;
 
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a1a2e);
+    this._scene = new THREE.Scene();
+    this._scene.background = new THREE.Color(0x1a1a2e);
 
-    this.camera = new THREE.PerspectiveCamera(
+    this._camera = new THREE.PerspectiveCamera(
       50,
       container.clientWidth / container.clientHeight,
       0.1,
       1000
     );
-    this.camera.position.set(5, 3, 8);
-    this.camera.lookAt(0, 0, 0);
+    this._camera.position.set(5, 3, 8);
+    this._camera.lookAt(0, 0, 0);
 
     this.setupScene();
 
-    this.destroyRef.onDestroy(() => this.cleanup());
+    this._destroyRef.onDestroy(() => this.cleanup());
   }
 
   private setupScene(): void {
-    if (!this.scene) return;
+    if (!this._scene) return;
 
-    const gridHelper = new THREE.GridHelper(20, 40, 0x3d3d5c, 0x2a2a4a);
-    this.scene.add(gridHelper);
+    const gridHelper: THREE.GridHelper = new THREE.GridHelper(20, 40, 0x3d3d5c, 0x2a2a4a);
+    this._scene.add(gridHelper);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    this.scene.add(ambientLight);
+    const ambientLight: THREE.AmbientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    this._scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    const directionalLight: THREE.DirectionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
     directionalLight.position.set(5, 10, 7);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
@@ -100,37 +100,37 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     directionalLight.shadow.camera.top = 15;
     directionalLight.shadow.camera.bottom = -15;
     directionalLight.shadow.bias = -0.0005;
-    this.scene.add(directionalLight);
+    this._scene.add(directionalLight);
 
-    const testGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const testMaterial = new THREE.MeshStandardMaterial({
+    const testGeometry: THREE.BoxGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const testMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
       color: 0x6366f1,
       roughness: 0.3,
       metalness: 0.1,
     });
-    const testMesh = new THREE.Mesh(testGeometry, testMaterial);
+    const testMesh: THREE.Mesh = new THREE.Mesh(testGeometry, testMaterial);
     testMesh.position.set(0, 0.5, 0);
     testMesh.castShadow = true;
     testMesh.receiveShadow = true;
-    this.scene.add(testMesh);
+    this._scene.add(testMesh);
 
-    const planeGeometry = new THREE.PlaneGeometry(20, 20);
-    const planeMaterial = new THREE.MeshStandardMaterial({
+    const planeGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(20, 20);
+    const planeMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
       color: 0x1e1e3a,
       roughness: 0.8,
       metalness: 0.0,
     });
-    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    const plane: THREE.Mesh = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.rotation.x = -Math.PI / 2;
     plane.position.y = 0;
     plane.receiveShadow = true;
-    this.scene.add(plane);
+    this._scene.add(plane);
   }
 
   private startAnimationLoop(): void {
-    this.ngZone.runOutsideAngular(() => {
+    this._ngZone.runOutsideAngular(() => {
       const animate = (): void => {
-        this.animationFrameId = requestAnimationFrame(animate);
+        this._animationFrameId = requestAnimationFrame(animate);
         this.render();
       };
       animate();
@@ -138,71 +138,71 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   private render(): void {
-    if (!this.renderer || !this.scene || !this.camera) return;
+    if (!this._renderer || !this._scene || !this._camera) return;
 
-    this.renderer.render(this.scene, this.camera);
+    this._renderer.render(this._scene, this._camera);
   }
 
   private setupResizeObserver(): void {
-    const container = this.containerRef();
+    const container: HTMLElement = this.containerRef();
 
-    this.resizeObserver = new ResizeObserver((entries) => {
+    this._resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
       for (const entry of entries) {
-        const { width, height } = entry.contentRect;
+        const { width, height }: { width: number; height: number } = entry.contentRect;
         if (width > 0 && height > 0) {
           this.onResize(width, height);
         }
       }
     });
 
-    this.resizeObserver.observe(container);
+    this._resizeObserver.observe(container);
   }
 
   private onResize(width: number, height: number): void {
-    if (!this.renderer || !this.camera) return;
+    if (!this._renderer || !this._camera) return;
 
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height, false);
+    this._camera.aspect = width / height;
+    this._camera.updateProjectionMatrix();
+    this._renderer.setSize(width, height, false);
   }
 
   private cleanup(): void {
-    if (this.animationFrameId !== undefined) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = undefined;
+    if (this._animationFrameId !== undefined) {
+      cancelAnimationFrame(this._animationFrameId);
+      this._animationFrameId = undefined;
     }
 
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = undefined;
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = undefined;
     }
 
-    if (this.renderer) {
-      this.renderer.dispose();
-      this.renderer.forceContextLoss();
-      const gl = this.renderer.getContext() as WebGLRenderingContext | null;
+    if (this._renderer) {
+      this._renderer.dispose();
+      this._renderer.forceContextLoss();
+      const gl: WebGLRenderingContext | null = this._renderer.getContext() as WebGLRenderingContext | null;
       if (gl) {
-        const extension = gl.getExtension('WEBGL_lose_context');
+        const extension: WEBGL_lose_context | null = gl.getExtension('WEBGL_lose_context');
         extension?.loseContext();
       }
-      this.renderer = undefined;
+      this._renderer = undefined;
     }
 
-    if (this.scene) {
-      this.scene.traverse((object) => {
+    if (this._scene) {
+      this._scene.traverse((object: THREE.Object3D) => {
         if (object instanceof THREE.Mesh) {
           object.geometry?.dispose();
           if (Array.isArray(object.material)) {
-            object.material.forEach((material) => material.dispose());
+            object.material.forEach((material: THREE.Material) => material.dispose());
           } else {
             object.material?.dispose();
           }
         }
       });
-      this.scene.clear();
-      this.scene = undefined;
+      this._scene.clear();
+      this._scene = undefined;
     }
 
-    this.camera = undefined;
+    this._camera = undefined;
   }
 }
