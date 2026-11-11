@@ -11,6 +11,8 @@ import {
   viewChild,
 } from '@angular/core';
 import * as THREE from 'three';
+import { WallSegment } from '@spacio/shared-types';
+import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 
 @Component({
   selector: 'app-viewport',
@@ -125,6 +127,10 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     plane.position.y = 0;
     plane.receiveShadow = true;
     this._scene.add(plane);
+
+    const walls: WallSegment[] = this._createSampleWalls();
+    const wallsMesh: THREE.Group = WallExtruder.createWallsMesh(walls);
+    this._scene.add(wallsMesh);
   }
 
   private _startAnimationLoop(): void {
@@ -164,6 +170,39 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     this._camera.aspect = width / height;
     this._camera.updateProjectionMatrix();
     this._renderer.setSize(width, height, false);
+  }
+
+  private _createSampleWalls(): WallSegment[] {
+    return [
+      {
+        id: 'wall-1',
+        start: { x: -4, y: -4 },
+        end: { x: 4, y: -4 },
+        height: 3,
+        thickness: 0.2,
+      },
+      {
+        id: 'wall-2',
+        start: { x: 4, y: -4 },
+        end: { x: 4, y: 4 },
+        height: 3,
+        thickness: 0.2,
+      },
+      {
+        id: 'wall-3',
+        start: { x: 4, y: 4 },
+        end: { x: -4, y: 4 },
+        height: 3,
+        thickness: 0.2,
+      },
+      {
+        id: 'wall-4',
+        start: { x: -4, y: 4 },
+        end: { x: -4, y: -4 },
+        height: 3,
+        thickness: 0.2,
+      },
+    ];
   }
 
   private _cleanup(): void {
