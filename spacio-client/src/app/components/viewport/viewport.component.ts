@@ -33,17 +33,17 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     afterNextRender(() => {
-      this.initializeThreeJS();
-      this.startAnimationLoop();
-      this.setupResizeObserver();
+      this._initializeThreeJS();
+      this._startAnimationLoop();
+      this._setupResizeObserver();
     });
   }
 
   ngOnDestroy(): void {
-    this.cleanup();
+    this._cleanup();
   }
 
-  private initializeThreeJS(): void {
+  private _initializeThreeJS(): void {
     const canvas: HTMLCanvasElement = this.canvasRef();
     const container: HTMLElement = this.containerRef();
 
@@ -74,12 +74,12 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     this._camera.position.set(5, 3, 8);
     this._camera.lookAt(0, 0, 0);
 
-    this.setupScene();
+    this._setupScene();
 
-    this._destroyRef.onDestroy(() => this.cleanup());
+    this._destroyRef.onDestroy(() => this._cleanup());
   }
 
-  private setupScene(): void {
+  private _setupScene(): void {
     if (!this._scene) return;
 
     const gridHelper: THREE.GridHelper = new THREE.GridHelper(20, 40, 0x3d3d5c, 0x2a2a4a);
@@ -127,30 +127,30 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     this._scene.add(plane);
   }
 
-  private startAnimationLoop(): void {
+  private _startAnimationLoop(): void {
     this._ngZone.runOutsideAngular(() => {
       const animate = (): void => {
         this._animationFrameId = requestAnimationFrame(animate);
-        this.render();
+        this._render();
       };
       animate();
     });
   }
 
-  private render(): void {
+  private _render(): void {
     if (!this._renderer || !this._scene || !this._camera) return;
 
     this._renderer.render(this._scene, this._camera);
   }
 
-  private setupResizeObserver(): void {
+  private _setupResizeObserver(): void {
     const container: HTMLElement = this.containerRef();
 
     this._resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
       for (const entry of entries) {
         const { width, height }: { width: number; height: number } = entry.contentRect;
         if (width > 0 && height > 0) {
-          this.onResize(width, height);
+          this._onResize(width, height);
         }
       }
     });
@@ -158,7 +158,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     this._resizeObserver.observe(container);
   }
 
-  private onResize(width: number, height: number): void {
+  private _onResize(width: number, height: number): void {
     if (!this._renderer || !this._camera) return;
 
     this._camera.aspect = width / height;
@@ -166,7 +166,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     this._renderer.setSize(width, height, false);
   }
 
-  private cleanup(): void {
+  private _cleanup(): void {
     if (this._animationFrameId !== undefined) {
       cancelAnimationFrame(this._animationFrameId);
       this._animationFrameId = undefined;
