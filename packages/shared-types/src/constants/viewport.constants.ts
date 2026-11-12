@@ -29,6 +29,8 @@ export const VIEWPORT_GRID_SNAP = 0.5;
 export const VIEWPORT_PREVIEW_LINE_COLOR = 0x7aa2ff;
 export const VIEWPORT_PREVIEW_LINE_OPACITY = 0.9;
 export const VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET = 0.02;
+export const VIEWPORT_GHOST_WALL_COLOR = 0x818cf8;
+export const VIEWPORT_GHOST_WALL_OPACITY = 0.4;
 
 export const VIEWPORT_RENDERER_POWER_PREFERENCE: WebGLPowerPreference = 'high-performance';
 export const VIEWPORT_MAX_PIXEL_RATIO = 2;
