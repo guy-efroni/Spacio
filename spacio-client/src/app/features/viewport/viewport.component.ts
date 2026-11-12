@@ -1,14 +1,10 @@
 import {
-  AfterViewInit,
   Component,
-  DestroyRef,
+  ElementRef,
   NgZone,
   OnDestroy,
-  Signal,
-  ViewChild,
   afterNextRender,
   inject,
-  viewChild,
 } from '@angular/core';
 import * as THREE from 'three';
 import { IWallSegment } from '@spacio/shared-types';
@@ -20,12 +16,9 @@ import { WallExtruder } from '../../shared/utils/wall-extruder.util';
   templateUrl: './viewport.component.html',
   styleUrl: './viewport.component.scss',
 })
-export class ViewportComponent implements AfterViewInit, OnDestroy {
+export class ViewportComponent implements OnDestroy {
+  private readonly _elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly _ngZone: NgZone = inject(NgZone);
-  private readonly _destroyRef: DestroyRef = inject(DestroyRef);
-
-  protected readonly containerRef: Signal<HTMLElement> = viewChild.required<HTMLElement>('container');
-  protected readonly canvasRef: Signal<HTMLCanvasElement> = viewChild.required<HTMLCanvasElement>('canvas');
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -33,7 +26,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
   private _animationFrameId?: number;
   private _resizeObserver?: ResizeObserver;
 
-  ngAfterViewInit(): void {
+  constructor() {
     afterNextRender(() => {
       this._initializeThreeJS();
       this._startAnimationLoop();
@@ -46,18 +39,25 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   private _initializeThreeJS(): void {
-    const canvas: HTMLCanvasElement = this.canvasRef();
-    const container: HTMLElement = this.containerRef();
+    const hostElement: HTMLElement = this._elementRef.nativeElement;
+    const container: HTMLElement = hostElement.querySelector('.viewport-container')!;
 
     this._renderer = new THREE.WebGLRenderer({
-      canvas,
       antialias: true,
       alpha: false,
       powerPreference: 'high-performance',
     });
 
+    // Mount renderer's canvas directly to the container
+    container.appendChild(this._renderer.domElement);
+
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this._renderer.setSize(container.clientWidth, container.clientHeight);
+
+    // Handle zero-dimension race condition on initial flex layout
+    const initialWidth = hostElement.clientWidth > 0 ? hostElement.clientWidth : window.innerWidth;
+    const initialHeight = hostElement.clientHeight > 0 ? hostElement.clientHeight : window.innerHeight - 48;
+
+    this._renderer.setSize(initialWidth, initialHeight);
     this._renderer.shadowMap.enabled = true;
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this._renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -69,7 +69,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
 
     this._camera = new THREE.PerspectiveCamera(
       50,
-      container.clientWidth / container.clientHeight,
+      initialWidth / initialHeight,
       0.1,
       1000
     );
@@ -77,8 +77,6 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     this._camera.lookAt(0, 0, 0);
 
     this._setupScene();
-
-    this._destroyRef.onDestroy(() => this._cleanup());
   }
 
   private _setupScene(): void {
@@ -150,7 +148,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
   }
 
   private _setupResizeObserver(): void {
-    const container: HTMLElement = this.containerRef();
+    const hostElement: HTMLElement = this._elementRef.nativeElement;
 
     this._resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
       for (const entry of entries) {
@@ -161,7 +159,7 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
       }
     });
 
-    this._resizeObserver.observe(container);
+    this._resizeObserver.observe(hostElement);
   }
 
   private _onResize(width: number, height: number): void {
@@ -217,6 +215,12 @@ export class ViewportComponent implements AfterViewInit, OnDestroy {
     }
 
     if (this._renderer) {
+      // Remove canvas from DOM safely
+      const canvas = this._renderer.domElement;
+      if (canvas.parentElement) {
+        canvas.parentElement.removeChild(canvas);
+      }
+
       this._renderer.dispose();
       this._renderer.forceContextLoss();
       const gl: WebGLRenderingContext | null = this._renderer.getContext() as WebGLRenderingContext | null;

@@ -13,7 +13,7 @@ export class WallExtruder {
     }
 
     const material: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8b5cf6,
+      color: 0xcccccc,
       roughness: 0.4,
       metalness: 0.1,
     });
