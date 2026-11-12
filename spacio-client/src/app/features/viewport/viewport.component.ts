@@ -60,6 +60,7 @@ import {
   ViewportToolMode,
   DELETE_KEY,
   BACKSPACE_KEY,
+  IWallMeshUserData,
 } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
@@ -343,17 +344,14 @@ export class ViewportComponent implements OnDestroy {
       true
     );
 
-    interface IWallMeshUserData {
-      id: string;
-      type: string;
-    }
-
-    const isWallMesh = (userData: unknown): userData is IWallMeshUserData => {
+    const isWallMesh = (
+      userData: Record<string, unknown>
+    ): userData is IWallMeshUserData => {
       return (
         typeof userData === 'object' &&
         userData !== null &&
-        (userData as IWallMeshUserData).type === 'wall' &&
-        typeof (userData as IWallMeshUserData).id === 'string'
+        (userData as unknown as IWallMeshUserData).type === 'wall' &&
+        typeof (userData as unknown as IWallMeshUserData).id === 'string'
       );
     };
 
