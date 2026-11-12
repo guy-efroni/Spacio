@@ -8,7 +8,7 @@
     "rootDir": "..",
     "paths": {
       "@spacio/shared-types": ["../packages/shared-types/src/index.ts"]
-    }
+    },
   },
   "include": [
     "src/**/*.ts"

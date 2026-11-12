@@ -7,6 +7,7 @@ import {
   inject,
 } from '@angular/core';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { IWallSegment } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 
@@ -23,6 +24,7 @@ export class ViewportComponent implements OnDestroy {
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
   private _camera?: THREE.PerspectiveCamera;
+  private _controls?: OrbitControls;
   private _animationFrameId?: number;
   private _resizeObserver?: ResizeObserver;
 
@@ -76,6 +78,13 @@ export class ViewportComponent implements OnDestroy {
     this._camera.position.set(5, 3, 8);
     this._camera.lookAt(0, 0, 0);
 
+    this._controls = new OrbitControls(this._camera, this._renderer.domElement);
+    this._controls.enableDamping = true;
+    this._controls.dampingFactor = 0.05;
+    this._controls.maxPolarAngle = Math.PI / 2 - 0.01;
+    this._controls.minDistance = 2;
+    this._controls.maxDistance = 50;
+
     this._setupScene();
   }
 
@@ -101,18 +110,6 @@ export class ViewportComponent implements OnDestroy {
     directionalLight.shadow.camera.bottom = -15;
     directionalLight.shadow.bias = -0.0005;
     this._scene.add(directionalLight);
-
-    const testGeometry: THREE.BoxGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const testMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
-      color: 0x6366f1,
-      roughness: 0.3,
-      metalness: 0.1,
-    });
-    const testMesh: THREE.Mesh = new THREE.Mesh(testGeometry, testMaterial);
-    testMesh.position.set(0, 0.5, 0);
-    testMesh.castShadow = true;
-    testMesh.receiveShadow = true;
-    this._scene.add(testMesh);
 
     const planeGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(20, 20);
     const planeMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
@@ -144,6 +141,7 @@ export class ViewportComponent implements OnDestroy {
   private _render(): void {
     if (!this._renderer || !this._scene || !this._camera) return;
 
+    this._controls?.update();
     this._renderer.render(this._scene, this._camera);
   }
 
@@ -245,6 +243,9 @@ export class ViewportComponent implements OnDestroy {
       this._scene.clear();
       this._scene = undefined;
     }
+
+    this._controls?.dispose();
+    this._controls = undefined;
 
     this._camera = undefined;
   }
