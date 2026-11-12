@@ -12,13 +12,17 @@ import {
   WALL_METALNESS,
   WALL_MESH_PREFIX,
   WALL_ROUGHNESS,
+  WALL_SELECTED_COLOR,
   WALLS_GROUP_NAME,
 } from '@spacio/shared-types';
 
 export class WallExtruder {
   private constructor() {}
 
-  public static createWallsMesh(walls: ReadonlyArray<IWallSegment>): THREE.Group {
+  public static createWallsMesh(
+    walls: ReadonlyArray<IWallSegment>,
+    selectedWallId: string | null = null
+  ): THREE.Group {
     const group: THREE.Group = new THREE.Group();
     group.name = WALLS_GROUP_NAME;
 
@@ -32,6 +36,14 @@ export class WallExtruder {
       metalness: WALL_METALNESS,
     });
 
+    const selectedWallMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
+      color: WALL_SELECTED_COLOR,
+      roughness: WALL_ROUGHNESS,
+      metalness: WALL_METALNESS,
+      emissive: WALL_SELECTED_COLOR,
+      emissiveIntensity: 0.35,
+    });
+
     const trimMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
       color: TRIM_COLOR,
       roughness: TRIM_ROUGHNESS,
@@ -39,7 +51,7 @@ export class WallExtruder {
     });
 
     for (const wall of walls) {
-      const { start, end, height, thickness }: IWallSegment = wall;
+      const { start, end, height, thickness, id }: IWallSegment = wall;
 
       const dx: number = end.x - start.x;
       const dz: number = end.y - start.y;
@@ -53,12 +65,17 @@ export class WallExtruder {
       const angle: number = Math.atan2(dz, dx);
 
       const wallGeometry: THREE.BoxGeometry = new THREE.BoxGeometry(length, height, thickness);
-      const wallMesh: THREE.Mesh = new THREE.Mesh(wallGeometry, wallMaterial);
+      const isSelected: boolean = id === selectedWallId;
+      const wallMesh: THREE.Mesh = new THREE.Mesh(
+        wallGeometry,
+        isSelected ? selectedWallMaterial : wallMaterial
+      );
       wallMesh.position.set(midX, height / 2, midZ);
       wallMesh.rotation.y = -angle;
       wallMesh.castShadow = true;
       wallMesh.receiveShadow = true;
-      wallMesh.name = `${WALL_MESH_PREFIX}-${wall.id}`;
+      wallMesh.name = `${WALL_MESH_PREFIX}-${id}`;
+      wallMesh.userData = { id, type: 'wall' };
       group.add(wallMesh);
 
       const baseboard: THREE.Mesh = WallExtruder._createTrimBox(
