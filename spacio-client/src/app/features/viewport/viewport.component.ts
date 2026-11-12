@@ -33,6 +33,8 @@ import {
   VIEWPORT_FLOOR_METALNESS,
   VIEWPORT_FLOOR_ROUGHNESS,
   VIEWPORT_FLOOR_SIZE,
+  VIEWPORT_GHOST_WALL_COLOR,
+  VIEWPORT_GHOST_WALL_OPACITY,
   VIEWPORT_GRID_COLOR_CENTER_LINE,
   VIEWPORT_GRID_COLOR_GRID,
   VIEWPORT_GRID_DIVISIONS,
@@ -102,6 +104,9 @@ export class ViewportComponent implements OnDestroy {
   private _previewLine?: THREE.Line;
   private _previewGeometry?: THREE.BufferGeometry;
   private _previewMaterial?: THREE.LineBasicMaterial;
+  private _ghostWallMesh: THREE.Mesh | null = null;
+  private _ghostWallGeometry?: THREE.BoxGeometry;
+  private _ghostWallMaterial?: THREE.MeshStandardMaterial;
 
   private readonly _onPointerDown: (event: PointerEvent) => void = (
     event: PointerEvent
@@ -137,6 +142,7 @@ export class ViewportComponent implements OnDestroy {
     this._setToolMode(ViewportToolMode.DrawWall);
     this._drawingStartPoint = null;
     this._hidePreviewLine();
+    this._removeGhostWallMesh();
   }
 
   protected _onRemoveLastWall(): void {
@@ -308,6 +314,7 @@ export class ViewportComponent implements OnDestroy {
     if (!this._drawingStartPoint) {
       this._drawingStartPoint = point;
       this._updatePreviewLine(point, point);
+      this._createGhostWallMesh(point, point);
       return;
     }
 
@@ -368,6 +375,7 @@ export class ViewportComponent implements OnDestroy {
     const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
     if (!point) return;
     this._updatePreviewLine(this._drawingStartPoint, point);
+    this._updateGhostWallMesh(this._drawingStartPoint, point);
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {
@@ -390,12 +398,14 @@ export class ViewportComponent implements OnDestroy {
   private _finishDrawing(): void {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
+    this._removeGhostWallMesh();
     this._setToolMode(ViewportToolMode.View);
   }
 
   private _cancelDrawing(): void {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
+    this._removeGhostWallMesh();
     this._setToolMode(ViewportToolMode.View);
   }
 
@@ -451,6 +461,78 @@ export class ViewportComponent implements OnDestroy {
     if (this._previewLine) {
       this._previewLine.visible = false;
     }
+  }
+
+  private _createGhostWallMesh(
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+  ): void {
+    if (!this._scene) return;
+    this._removeGhostWallMesh();
+
+    this._ghostWallGeometry = new THREE.BoxGeometry(
+      1,
+      DEFAULT_WALL_HEIGHT,
+      DEFAULT_WALL_THICKNESS
+    );
+    this._ghostWallMaterial = new THREE.MeshStandardMaterial({
+      color: VIEWPORT_GHOST_WALL_COLOR,
+      transparent: true,
+      opacity: VIEWPORT_GHOST_WALL_OPACITY,
+      roughness: 0.6,
+      metalness: 0.0,
+    });
+    this._ghostWallMesh = new THREE.Mesh(this._ghostWallGeometry, this._ghostWallMaterial);
+    this._ghostWallMesh.name = WALL_PREVIEW_NAME;
+    this._ghostWallMesh.castShadow = false;
+    this._ghostWallMesh.receiveShadow = false;
+    this._scene.add(this._ghostWallMesh);
+
+    this._updateGhostWallMesh(start, end);
+  }
+
+  private _updateGhostWallMesh(
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+  ): void {
+    if (!this._ghostWallMesh || !this._ghostWallGeometry) return;
+
+    const dx: number = end.x - start.x;
+    const dz: number = end.y - start.y;
+    const length: number = Math.sqrt(dx * dx + dz * dz);
+
+    if (length <= WALL_PLACEMENT_EPSILON) {
+      this._ghostWallMesh.visible = false;
+      return;
+    }
+
+    this._ghostWallGeometry.dispose();
+    this._ghostWallGeometry = new THREE.BoxGeometry(
+      length,
+      DEFAULT_WALL_HEIGHT,
+      DEFAULT_WALL_THICKNESS
+    );
+    this._ghostWallMesh.geometry = this._ghostWallGeometry;
+
+    const midX: number = (start.x + end.x) / 2;
+    const midZ: number = (start.y + end.y) / 2;
+    const angle: number = Math.atan2(dz, dx);
+
+    this._ghostWallMesh.position.set(midX, DEFAULT_WALL_HEIGHT / 2, midZ);
+    this._ghostWallMesh.rotation.y = -angle;
+    this._ghostWallMesh.visible = true;
+  }
+
+  private _removeGhostWallMesh(): void {
+    if (!this._ghostWallMesh) return;
+    if (this._scene) {
+      this._scene.remove(this._ghostWallMesh);
+    }
+    this._ghostWallMesh.geometry?.dispose();
+    this._ghostWallMaterial?.dispose();
+    this._ghostWallMesh = null;
+    this._ghostWallGeometry = undefined;
+    this._ghostWallMaterial = undefined;
   }
 
   private _generateWallId(): string {
@@ -569,6 +651,7 @@ export class ViewportComponent implements OnDestroy {
     }
 
     this._wallsGroup.clear();
+    this._removeGhostWallMesh();
     this._previewGeometry?.dispose();
     this._previewMaterial?.dispose();
     this._previewGeometry = undefined;
