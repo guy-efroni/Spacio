@@ -1,23 +1,26 @@
 import * as THREE from 'three';
-import { IWallSegment } from '@spacio/shared-types';
-
-const WALL_COLOR = 0xf5f5f0;
-const WALL_ROUGHNESS = 0.75;
-const WALL_METALNESS = 0.0;
-
-const TRIM_COLOR = 0xe8e8e0;
-const TRIM_ROUGHNESS = 0.6;
-const TRIM_METALNESS = 0.0;
-
-const TRIM_THICKNESS = 0.06;
-const TRIM_HEIGHT = 0.15;
+import {
+  BASEBOARD_MESH_PREFIX,
+  CROWN_MESH_PREFIX,
+  IWallSegment,
+  TRIM_COLOR,
+  TRIM_HEIGHT,
+  TRIM_METALNESS,
+  TRIM_ROUGHNESS,
+  TRIM_THICKNESS,
+  WALL_COLOR,
+  WALL_METALNESS,
+  WALL_MESH_PREFIX,
+  WALL_ROUGHNESS,
+  WALLS_GROUP_NAME,
+} from '@spacio/shared-types';
 
 export class WallExtruder {
   private constructor() {}
 
   public static createWallsMesh(walls: ReadonlyArray<IWallSegment>): THREE.Group {
     const group: THREE.Group = new THREE.Group();
-    group.name = 'walls';
+    group.name = WALLS_GROUP_NAME;
 
     if (walls.length === 0) {
       return group;
@@ -55,7 +58,7 @@ export class WallExtruder {
       wallMesh.rotation.y = -angle;
       wallMesh.castShadow = true;
       wallMesh.receiveShadow = true;
-      wallMesh.name = `wall-${wall.id}`;
+      wallMesh.name = `${WALL_MESH_PREFIX}-${wall.id}`;
       group.add(wallMesh);
 
       const baseboard: THREE.Mesh = WallExtruder._createTrimBox(
@@ -68,7 +71,7 @@ export class WallExtruder {
       baseboard.rotation.y = -angle;
       baseboard.castShadow = true;
       baseboard.receiveShadow = true;
-      baseboard.name = `baseboard-${wall.id}`;
+      baseboard.name = `${BASEBOARD_MESH_PREFIX}-${wall.id}`;
       group.add(baseboard);
 
       const crown: THREE.Mesh = WallExtruder._createTrimBox(
@@ -81,7 +84,7 @@ export class WallExtruder {
       crown.rotation.y = -angle;
       crown.castShadow = true;
       crown.receiveShadow = true;
-      crown.name = `crown-${wall.id}`;
+      crown.name = `${CROWN_MESH_PREFIX}-${wall.id}`;
       group.add(crown);
     }
 

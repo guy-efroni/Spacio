@@ -11,13 +11,61 @@ import {
 } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { IWallSegment } from '@spacio/shared-types';
+import {
+  DEFAULT_WALL_HEIGHT,
+  DEFAULT_WALL_THICKNESS,
+  ESCAPE_KEY,
+  IWallSegment,
+  PRIMARY_POINTER_BUTTON,
+  VIEWPORT_AMBIENT_LIGHT_COLOR,
+  VIEWPORT_AMBIENT_LIGHT_INTENSITY,
+  VIEWPORT_BACKGROUND_COLOR,
+  VIEWPORT_CAMERA_FAR,
+  VIEWPORT_CAMERA_FOV,
+  VIEWPORT_CAMERA_LOOK_AT,
+  VIEWPORT_CAMERA_NEAR,
+  VIEWPORT_CAMERA_POSITION,
+  VIEWPORT_CONTROLS_DAMPING_FACTOR,
+  VIEWPORT_DIRECTIONAL_LIGHT_COLOR,
+  VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY,
+  VIEWPORT_DIRECTIONAL_LIGHT_POSITION,
+  VIEWPORT_FLOOR_COLOR,
+  VIEWPORT_FLOOR_METALNESS,
+  VIEWPORT_FLOOR_ROUGHNESS,
+  VIEWPORT_FLOOR_SIZE,
+  VIEWPORT_GRID_COLOR_CENTER_LINE,
+  VIEWPORT_GRID_COLOR_GRID,
+  VIEWPORT_GRID_DIVISIONS,
+  VIEWPORT_GRID_SIZE,
+  VIEWPORT_GRID_SNAP,
+  VIEWPORT_MAX_DISTANCE,
+  VIEWPORT_MAX_PIXEL_RATIO,
+  VIEWPORT_MAX_POLAR_ANGLE,
+  VIEWPORT_MIN_DISTANCE,
+  VIEWPORT_PREVIEW_LINE_COLOR,
+  VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET,
+  VIEWPORT_PREVIEW_LINE_OPACITY,
+  VIEWPORT_RENDERER_POWER_PREFERENCE,
+  VIEWPORT_SHADOW_BIAS,
+  VIEWPORT_SHADOW_CAMERA_EXTENT,
+  VIEWPORT_SHADOW_CAMERA_FAR,
+  VIEWPORT_SHADOW_CAMERA_NEAR,
+  VIEWPORT_SHADOW_MAP_SIZE,
+  VIEWPORT_TONE_MAPPING_EXPOSURE,
+  WALLS_ROOT_GROUP_NAME,
+  WALL_ID_SEPARATOR,
+  WALL_MESH_PREFIX,
+  WALL_PLACEMENT_EPSILON,
+  WALL_PREVIEW_NAME,
+  ViewportToolMode,
+} from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
 
-const WALL_HEIGHT = 3;
-const WALL_THICKNESS = 0.2;
-const GRID_SNAP = 0.5;
+const VIEWPORT_HEADER_OFFSET_PX = 48;
+const DEFAULT_INITIAL_WIDTH = typeof window !== 'undefined' ? window.innerWidth : 0;
+const DEFAULT_INITIAL_HEIGHT =
+  typeof window !== 'undefined' ? window.innerHeight - VIEWPORT_HEADER_OFFSET_PX : 0;
 
 @Component({
   selector: 'app-viewport',
@@ -63,7 +111,7 @@ export class ViewportComponent implements OnDestroy {
   ) => this._handleKeyDown(event);
 
   constructor() {
-    this._wallsGroup.name = 'walls-root';
+    this._wallsGroup.name = WALLS_ROOT_GROUP_NAME;
     effect(() => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
       if (!this._scene || !this._wallsGroup) return;
@@ -79,7 +127,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   protected _onAddInteriorWall(): void {
-    this.isDrawingMode.set(true);
+    this._setToolMode(ViewportToolMode.DrawWall);
     this._drawingStartPoint = null;
     this._hidePreviewLine();
   }
@@ -104,42 +152,50 @@ export class ViewportComponent implements OnDestroy {
     this._renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
-      powerPreference: 'high-performance',
+      powerPreference: VIEWPORT_RENDERER_POWER_PREFERENCE,
     });
 
     container.appendChild(this._renderer.domElement);
-    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, VIEWPORT_MAX_PIXEL_RATIO));
 
     const initialWidth: number =
-      hostElement.clientWidth > 0 ? hostElement.clientWidth : window.innerWidth;
+      hostElement.clientWidth > 0 ? hostElement.clientWidth : DEFAULT_INITIAL_WIDTH;
     const initialHeight: number =
-      hostElement.clientHeight > 0 ? hostElement.clientHeight : window.innerHeight - 48;
+      hostElement.clientHeight > 0 ? hostElement.clientHeight : DEFAULT_INITIAL_HEIGHT;
 
     this._renderer.setSize(initialWidth, initialHeight);
     this._renderer.shadowMap.enabled = true;
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this._renderer.outputColorSpace = THREE.SRGBColorSpace;
     this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._renderer.toneMappingExposure = 1.0;
+    this._renderer.toneMappingExposure = VIEWPORT_TONE_MAPPING_EXPOSURE;
 
     this._scene = new THREE.Scene();
-    this._scene.background = new THREE.Color(0x1a1a2e);
+    this._scene.background = new THREE.Color(VIEWPORT_BACKGROUND_COLOR);
 
     this._camera = new THREE.PerspectiveCamera(
-      50,
+      VIEWPORT_CAMERA_FOV,
       initialWidth / initialHeight,
-      0.1,
-      1000
+      VIEWPORT_CAMERA_NEAR,
+      VIEWPORT_CAMERA_FAR
     );
-    this._camera.position.set(5, 3, 8);
-    this._camera.lookAt(0, 0, 0);
+    this._camera.position.set(
+      VIEWPORT_CAMERA_POSITION.x,
+      VIEWPORT_CAMERA_POSITION.y,
+      VIEWPORT_CAMERA_POSITION.z
+    );
+    this._camera.lookAt(
+      VIEWPORT_CAMERA_LOOK_AT.x,
+      VIEWPORT_CAMERA_LOOK_AT.y,
+      VIEWPORT_CAMERA_LOOK_AT.z
+    );
 
     this._controls = new OrbitControls(this._camera, this._renderer.domElement);
     this._controls.enableDamping = true;
-    this._controls.dampingFactor = 0.05;
-    this._controls.maxPolarAngle = Math.PI / 2 - 0.01;
-    this._controls.minDistance = 2;
-    this._controls.maxDistance = 50;
+    this._controls.dampingFactor = VIEWPORT_CONTROLS_DAMPING_FACTOR;
+    this._controls.maxPolarAngle = VIEWPORT_MAX_POLAR_ANGLE;
+    this._controls.minDistance = VIEWPORT_MIN_DISTANCE;
+    this._controls.maxDistance = VIEWPORT_MAX_DISTANCE;
 
     this._setupScene();
     this._setupInteractions();
@@ -148,31 +204,49 @@ export class ViewportComponent implements OnDestroy {
   private _setupScene(): void {
     if (!this._scene) return;
 
-    const gridHelper: THREE.GridHelper = new THREE.GridHelper(20, 40, 0x3d3d5c, 0x2a2a4a);
+    const gridHelper: THREE.GridHelper = new THREE.GridHelper(
+      VIEWPORT_GRID_SIZE,
+      VIEWPORT_GRID_DIVISIONS,
+      VIEWPORT_GRID_COLOR_CENTER_LINE,
+      VIEWPORT_GRID_COLOR_GRID
+    );
     this._scene.add(gridHelper);
 
-    const ambientLight: THREE.AmbientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight: THREE.AmbientLight = new THREE.AmbientLight(
+      VIEWPORT_AMBIENT_LIGHT_COLOR,
+      VIEWPORT_AMBIENT_LIGHT_INTENSITY
+    );
     this._scene.add(ambientLight);
 
-    const directionalLight: THREE.DirectionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(5, 10, 7);
+    const directionalLight: THREE.DirectionalLight = new THREE.DirectionalLight(
+      VIEWPORT_DIRECTIONAL_LIGHT_COLOR,
+      VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY
+    );
+    directionalLight.position.set(
+      VIEWPORT_DIRECTIONAL_LIGHT_POSITION.x,
+      VIEWPORT_DIRECTIONAL_LIGHT_POSITION.y,
+      VIEWPORT_DIRECTIONAL_LIGHT_POSITION.z
+    );
     directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 50;
-    directionalLight.shadow.camera.left = -15;
-    directionalLight.shadow.camera.right = 15;
-    directionalLight.shadow.camera.top = 15;
-    directionalLight.shadow.camera.bottom = -15;
-    directionalLight.shadow.bias = -0.0005;
+    directionalLight.shadow.mapSize.width = VIEWPORT_SHADOW_MAP_SIZE;
+    directionalLight.shadow.mapSize.height = VIEWPORT_SHADOW_MAP_SIZE;
+    directionalLight.shadow.camera.near = VIEWPORT_SHADOW_CAMERA_NEAR;
+    directionalLight.shadow.camera.far = VIEWPORT_SHADOW_CAMERA_FAR;
+    directionalLight.shadow.camera.left = -VIEWPORT_SHADOW_CAMERA_EXTENT;
+    directionalLight.shadow.camera.right = VIEWPORT_SHADOW_CAMERA_EXTENT;
+    directionalLight.shadow.camera.top = VIEWPORT_SHADOW_CAMERA_EXTENT;
+    directionalLight.shadow.camera.bottom = -VIEWPORT_SHADOW_CAMERA_EXTENT;
+    directionalLight.shadow.bias = VIEWPORT_SHADOW_BIAS;
     this._scene.add(directionalLight);
 
-    const planeGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(20, 20);
+    const planeGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(
+      VIEWPORT_FLOOR_SIZE,
+      VIEWPORT_FLOOR_SIZE
+    );
     const planeMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1e1e3a,
-      roughness: 0.8,
-      metalness: 0.0,
+      color: VIEWPORT_FLOOR_COLOR,
+      roughness: VIEWPORT_FLOOR_ROUGHNESS,
+      metalness: VIEWPORT_FLOOR_METALNESS,
     });
     const plane: THREE.Mesh = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.rotation.x = -Math.PI / 2;
@@ -193,13 +267,13 @@ export class ViewportComponent implements OnDestroy {
       new THREE.BufferAttribute(new Float32Array(6), 3)
     );
     this._previewMaterial = new THREE.LineBasicMaterial({
-      color: 0x7aa2ff,
+      color: VIEWPORT_PREVIEW_LINE_COLOR,
       transparent: true,
-      opacity: 0.9,
+      opacity: VIEWPORT_PREVIEW_LINE_OPACITY,
     });
     this._previewLine = new THREE.Line(this._previewGeometry, this._previewMaterial);
     this._previewLine.visible = false;
-    this._previewLine.name = 'wall-preview';
+    this._previewLine.name = WALL_PREVIEW_NAME;
     this._scene.add(this._previewLine);
   }
 
@@ -212,7 +286,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _handlePointerDown(event: PointerEvent): void {
-    if (event.button !== 0) return;
+    if (event.button !== PRIMARY_POINTER_BUTTON) return;
     if (!this.isDrawingMode()) return;
 
     const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
@@ -227,14 +301,15 @@ export class ViewportComponent implements OnDestroy {
     const start: { x: number; y: number } = this._drawingStartPoint;
     const end: { x: number; y: number } = point;
     const isZeroLength: boolean =
-      Math.abs(start.x - end.x) < 0.0001 && Math.abs(start.y - end.y) < 0.0001;
+      Math.abs(start.x - end.x) < WALL_PLACEMENT_EPSILON &&
+      Math.abs(start.y - end.y) < WALL_PLACEMENT_EPSILON;
     if (!isZeroLength) {
       const wall: IWallSegment = {
         id: this._generateWallId(),
         start,
         end,
-        height: WALL_HEIGHT,
-        thickness: WALL_THICKNESS,
+        height: DEFAULT_WALL_HEIGHT,
+        thickness: DEFAULT_WALL_THICKNESS,
       };
       this.floorplanService.addWall(wall);
     }
@@ -250,7 +325,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && this.isDrawingMode()) {
+    if (event.key === ESCAPE_KEY && this.isDrawingMode()) {
       this._cancelDrawing();
     }
   }
@@ -258,13 +333,17 @@ export class ViewportComponent implements OnDestroy {
   private _finishDrawing(): void {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
-    this.isDrawingMode.set(false);
+    this._setToolMode(ViewportToolMode.View);
   }
 
   private _cancelDrawing(): void {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
-    this.isDrawingMode.set(false);
+    this._setToolMode(ViewportToolMode.View);
+  }
+
+  private _setToolMode(mode: ViewportToolMode): void {
+    this.isDrawingMode.set(mode === ViewportToolMode.DrawWall);
   }
 
   private _getSnappedFloorPoint(event: PointerEvent): { x: number; y: number } | null {
@@ -288,7 +367,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _snapToGrid(value: number): number {
-    return Math.round(value / GRID_SNAP) * GRID_SNAP;
+    return Math.round(value / VIEWPORT_GRID_SNAP) * VIEWPORT_GRID_SNAP;
   }
 
   private _updatePreviewLine(
@@ -301,10 +380,10 @@ export class ViewportComponent implements OnDestroy {
     ) as THREE.BufferAttribute;
     const array: Float32Array = positionAttribute.array as Float32Array;
     array[0] = start.x;
-    array[1] = 0.02;
+    array[1] = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
     array[2] = start.y;
     array[3] = end.x;
-    array[4] = 0.02;
+    array[4] = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
     array[5] = end.y;
     positionAttribute.needsUpdate = true;
     this._previewGeometry.computeBoundingSphere();
@@ -318,7 +397,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _generateWallId(): string {
-    return `wall-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    return `${WALL_MESH_PREFIX}${WALL_ID_SEPARATOR}${Date.now()}${WALL_ID_SEPARATOR}${Math.random().toString(36).slice(2, 7)}`;
   }
 
   private _syncWalls(walls: ReadonlyArray<IWallSegment>): void {

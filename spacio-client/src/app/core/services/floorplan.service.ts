@@ -1,39 +1,10 @@
 import { Injectable, Signal, WritableSignal, signal } from '@angular/core';
-import { IWallSegment } from '@spacio/shared-types';
-
-const DEFAULT_WALL_HEIGHT = 3;
-const DEFAULT_WALL_THICKNESS = 0.2;
-
-const INITIAL_SQUARE_ROOM: IWallSegment[] = [
-  {
-    id: 'wall-1',
-    start: { x: -4, y: -4 },
-    end: { x: 4, y: -4 },
-    height: DEFAULT_WALL_HEIGHT,
-    thickness: DEFAULT_WALL_THICKNESS,
-  },
-  {
-    id: 'wall-2',
-    start: { x: 4, y: -4 },
-    end: { x: 4, y: 4 },
-    height: DEFAULT_WALL_HEIGHT,
-    thickness: DEFAULT_WALL_THICKNESS,
-  },
-  {
-    id: 'wall-3',
-    start: { x: 4, y: 4 },
-    end: { x: -4, y: 4 },
-    height: DEFAULT_WALL_HEIGHT,
-    thickness: DEFAULT_WALL_THICKNESS,
-  },
-  {
-    id: 'wall-4',
-    start: { x: -4, y: 4 },
-    end: { x: -4, y: -4 },
-    height: DEFAULT_WALL_HEIGHT,
-    thickness: DEFAULT_WALL_THICKNESS,
-  },
-];
+import {
+  DEFAULT_WALL_HEIGHT,
+  DEFAULT_WALL_THICKNESS,
+  INITIAL_SQUARE_ROOM,
+  IWallSegment,
+} from '@spacio/shared-types';
 
 @Injectable({ providedIn: 'root' })
 export class FloorplanService {

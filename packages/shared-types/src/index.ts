@@ -4,3 +4,7 @@ export * from './geometry/wall.interface';
 export * from './furniture/scene-object-transform.interface';
 export * from './furniture/placed-object.interface';
 export * from './project/room-data.interface';
+export * from './constants/viewport.constants';
+export * from './constants/wall.constants';
+export * from './constants/wall-extruder.constants';
+export * from './enums/viewport-tool-mode.enum';
