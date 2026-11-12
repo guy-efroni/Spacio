@@ -54,8 +54,8 @@ export class ViewportComponent implements OnDestroy {
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     // Handle zero-dimension race condition on initial flex layout
-    const initialWidth = hostElement.clientWidth > 0 ? hostElement.clientWidth : window.innerWidth;
-    const initialHeight = hostElement.clientHeight > 0 ? hostElement.clientHeight : window.innerHeight - 48;
+    const initialWidth: number = hostElement.clientWidth > 0 ? hostElement.clientWidth : window.innerWidth;
+    const initialHeight: number = hostElement.clientHeight > 0 ? hostElement.clientHeight : window.innerHeight - 48;
 
     this._renderer.setSize(initialWidth, initialHeight);
     this._renderer.shadowMap.enabled = true;
@@ -216,7 +216,7 @@ export class ViewportComponent implements OnDestroy {
 
     if (this._renderer) {
       // Remove canvas from DOM safely
-      const canvas = this._renderer.domElement;
+      const canvas: HTMLCanvasElement = this._renderer.domElement;
       if (canvas.parentElement) {
         canvas.parentElement.removeChild(canvas);
       }
