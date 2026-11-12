@@ -20,6 +20,7 @@
     Delete Selected Wall
   </button>
   <button type="button" class="viewport-toolbar__button viewport-toolbar__button--accent" (click)="_onResetRoom()">Reset Room</button>
+  <button type="button" class="viewport-toolbar__button" (click)="_onClearAllWalls()">Clear All Walls</button>
 </div>
 @if (isDrawingMode()) {
   <div class="viewport-toolbar__hint">First click: start point, second: place wall. Press Esc to cancel.</div>

@@ -174,6 +174,11 @@ export class ViewportComponent implements OnDestroy {
     this.floorplanService.resetToDefaultRoom();
   }
 
+  protected _onClearAllWalls(): void {
+    this._cancelDrawing();
+    this.floorplanService.clearAllWalls();
+  }
+
   ngOnDestroy(): void {
     this._cleanup();
   }

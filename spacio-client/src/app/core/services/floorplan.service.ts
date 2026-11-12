@@ -57,6 +57,11 @@ export class FloorplanService {
     this._selectedWallId.set(null);
   }
 
+  clearAllWalls(): void {
+    this._walls.set([]);
+    this._selectedWallId.set(null);
+  }
+
   private _createDefaultRoom(): IWallSegment[] {
     return INITIAL_SQUARE_ROOM.map((wall: IWallSegment) => ({
       ...wall,
