@@ -1,13 +1,8 @@
 declare module 'three/examples/jsm/controls/OrbitControls' {
   import { Camera, EventDispatcher } from 'three';
+  import { IOrbitControlsEventMap } from './IOrbitControlsEventMap';
 
-  export interface OrbitControlsEventMap {
-    change: {};
-    start: {};
-    end: {};
-  }
-
-  export class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
+  export class OrbitControls extends EventDispatcher<IOrbitControlsEventMap> {
     constructor(object: Camera, domElement?: HTMLElement);
 
     object: Camera;
