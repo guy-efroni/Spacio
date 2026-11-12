@@ -24,6 +24,15 @@
 @if (isDrawingMode()) {
   <div class="viewport-toolbar__hint">First click: start point, second: place wall. Press Esc to cancel.</div>
 }
+@if (isDrawingMode() && ghostBadgePosition()) {
+  <div
+    class="ghost-length-badge"
+    [style.left.px]="ghostBadgePosition()!.x"
+    [style.top.px]="ghostBadgePosition()!.y"
+  >
+    {{ ghostBadgeLength() }}
+  </div>
+}
 @if (floorplanService.selectedWallId()) {
   <div class="viewport-toolbar__hint">Wall selected. Press Delete or Backspace to remove.</div>
 }

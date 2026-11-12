@@ -112,6 +112,8 @@ export class ViewportComponent implements OnDestroy {
   private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
 
   private _drawingStartPoint: { x: number; y: number } | null = null;
+  protected readonly ghostBadgeLength: WritableSignal<string> = signal<string>('');
+  protected readonly ghostBadgePosition: WritableSignal<{ x: number; y: number } | null> = signal<{ x: number; y: number } | null>(null);
   private _previewLine?: THREE.Line;
   private _previewGeometry?: THREE.BufferGeometry;
   private _previewMaterial?: THREE.LineBasicMaterial;
@@ -396,6 +398,7 @@ export class ViewportComponent implements OnDestroy {
     if (!point) return;
     this._updatePreviewLine(this._drawingStartPoint, point);
     this._updateGhostWallMesh(this._drawingStartPoint, point);
+    this._updateGhostBadge(this._drawingStartPoint, point);
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {
@@ -419,6 +422,7 @@ export class ViewportComponent implements OnDestroy {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
     this._removeGhostWallMesh();
+    this._hideGhostBadge();
     this._setToolMode(ViewportToolMode.View);
   }
 
@@ -426,6 +430,7 @@ export class ViewportComponent implements OnDestroy {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
     this._removeGhostWallMesh();
+    this._hideGhostBadge();
     this._setToolMode(ViewportToolMode.View);
   }
 
@@ -455,6 +460,40 @@ export class ViewportComponent implements OnDestroy {
 
   private _snapToGrid(value: number): number {
     return Math.round(value / VIEWPORT_GRID_SNAP) * VIEWPORT_GRID_SNAP;
+  }
+
+  private _projectToScreen(x: number, y: number, z: number): { x: number; y: number } | null {
+    if (!this._renderer || !this._camera) return null;
+    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    const vector: THREE.Vector3 = new THREE.Vector3(x, y, z);
+    vector.project(this._camera);
+    const screenX: number = (vector.x * 0.5 + 0.5) * rect.width + rect.left;
+    const screenY: number = (-(vector.y * 0.5) + 0.5) * rect.height + rect.top;
+    return { x: screenX, y: screenY };
+  }
+
+  private _updateGhostBadge(start: { x: number; y: number }, end: { x: number; y: number }): void {
+    if (!this._camera) return;
+    const dx: number = end.x - start.x;
+    const dz: number = end.y - start.y;
+    const length: number = Math.hypot(dx, dz);
+    const midX: number = (start.x + end.x) / 2;
+    const midZ: number = (start.y + end.y) / 2;
+    const projection: { x: number; y: number } | null = this._projectToScreen(
+      midX,
+      VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET + 0.5,
+      midZ
+    );
+    if (!projection) return;
+    this.ghostBadgeLength.set(`${length.toFixed(1)}m`);
+    this.ghostBadgePosition.set(projection);
+  }
+
+  private _hideGhostBadge(): void {
+    this.ghostBadgeLength.set('');
+    this.ghostBadgePosition.set(null);
   }
 
   private _updatePreviewLine(
@@ -585,7 +624,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _syncFloors(polygon: readonly { x: number; y: number }[] | null): void {
-    if (!this._floorsGroup) return;
+    if (!this._scene || !this._floorsGroup) return;
 
     if (this._floorMesh) {
       this._floorsGroup.remove(this._floorMesh);
@@ -599,10 +638,21 @@ export class ViewportComponent implements OnDestroy {
       return;
     }
 
+    const validPoints: { x: number; y: number }[] = [];
+    for (const point of polygon) {
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+        return;
+      }
+      validPoints.push(point);
+    }
+    if (validPoints.length < 3) {
+      return;
+    }
+
     const shape: THREE.Shape = new THREE.Shape();
-    shape.moveTo(polygon[0].x, polygon[0].y);
-    for (let i: number = 1; i < polygon.length; i++) {
-      shape.lineTo(polygon[i].x, polygon[i].y);
+    shape.moveTo(validPoints[0].x, validPoints[0].y);
+    for (let i: number = 1; i < validPoints.length; i++) {
+      shape.lineTo(validPoints[i].x, validPoints[i].y);
     }
 
     const geometry: THREE.ShapeGeometry = new THREE.ShapeGeometry(shape);
