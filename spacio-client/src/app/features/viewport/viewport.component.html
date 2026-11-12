@@ -1,1 +1,7 @@
 <div class="viewport-container"></div>
+<div class="viewport-toolbar">
+  <div class="viewport-toolbar__counter">Walls: {{ floorplanService.walls().length }}</div>
+  <button type="button" class="viewport-toolbar__button" (click)="_onAddInteriorWall()">Add Interior Wall</button>
+  <button type="button" class="viewport-toolbar__button" (click)="_onRemoveLastWall()">Undo / Remove Last Wall</button>
+  <button type="button" class="viewport-toolbar__button viewport-toolbar__button--accent" (click)="_onResetRoom()">Reset Room</button>
+</div>

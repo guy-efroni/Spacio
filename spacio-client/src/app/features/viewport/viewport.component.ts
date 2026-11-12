@@ -4,12 +4,14 @@ import {
   NgZone,
   OnDestroy,
   afterNextRender,
+  effect,
   inject,
 } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { IWallSegment } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
+import { FloorplanService } from '../../core/services/floorplan.service';
 
 @Component({
   selector: 'app-viewport',
@@ -20,6 +22,7 @@ import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 export class ViewportComponent implements OnDestroy {
   private readonly _elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly _ngZone: NgZone = inject(NgZone);
+  protected readonly floorplanService: FloorplanService = inject(FloorplanService);
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -27,13 +30,39 @@ export class ViewportComponent implements OnDestroy {
   private _controls?: OrbitControls;
   private _animationFrameId?: number;
   private _resizeObserver?: ResizeObserver;
+  private readonly _wallsGroup: THREE.Group = new THREE.Group();
 
   constructor() {
+    this._wallsGroup.name = 'walls-root';
+    effect(() => {
+      const walls: readonly IWallSegment[] = this.floorplanService.walls();
+      this._syncWalls(walls);
+    });
+
     afterNextRender(() => {
       this._initializeThreeJS();
       this._startAnimationLoop();
       this._setupResizeObserver();
     });
+  }
+
+  protected _onAddInteriorWall(): void {
+    const wall: IWallSegment = {
+      id: `wall-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      start: { x: -2, y: 0 },
+      end: { x: 2, y: 0 },
+      height: 3,
+      thickness: 0.2,
+    };
+    this.floorplanService.addWall(wall);
+  }
+
+  protected _onRemoveLastWall(): void {
+    this.floorplanService.removeLastWall();
+  }
+
+  protected _onResetRoom(): void {
+    this.floorplanService.resetToDefaultRoom();
   }
 
   ngOnDestroy(): void {
@@ -123,9 +152,33 @@ export class ViewportComponent implements OnDestroy {
     plane.receiveShadow = true;
     this._scene.add(plane);
 
-    const walls: IWallSegment[] = this._createSampleWalls();
+    this._scene.add(this._wallsGroup);
+    this._syncWalls(this.floorplanService.walls());
+  }
+
+  private _syncWalls(walls: ReadonlyArray<IWallSegment>): void {
+    if (!this._wallsGroup) return;
+    this._disposeWallsGroup();
+
     const wallsMesh: THREE.Group = WallExtruder.createWallsMesh(walls);
-    this._scene.add(wallsMesh);
+    while (wallsMesh.children.length > 0) {
+      const child: THREE.Object3D = wallsMesh.children[0];
+      this._wallsGroup.add(child);
+    }
+  }
+
+  private _disposeWallsGroup(): void {
+    this._wallsGroup.traverse((object: THREE.Object3D) => {
+      if (object instanceof THREE.Mesh) {
+        object.geometry?.dispose();
+        if (Array.isArray(object.material)) {
+          object.material.forEach((material: THREE.Material) => material.dispose());
+        } else {
+          object.material?.dispose();
+        }
+      }
+    });
+    this._wallsGroup.clear();
   }
 
   private _startAnimationLoop(): void {
@@ -166,39 +219,6 @@ export class ViewportComponent implements OnDestroy {
     this._camera.aspect = width / height;
     this._camera.updateProjectionMatrix();
     this._renderer.setSize(width, height, false);
-  }
-
-  private _createSampleWalls(): IWallSegment[] {
-    return [
-      {
-        id: 'wall-1',
-        start: { x: -4, y: -4 },
-        end: { x: 4, y: -4 },
-        height: 3,
-        thickness: 0.2,
-      },
-      {
-        id: 'wall-2',
-        start: { x: 4, y: -4 },
-        end: { x: 4, y: 4 },
-        height: 3,
-        thickness: 0.2,
-      },
-      {
-        id: 'wall-3',
-        start: { x: 4, y: 4 },
-        end: { x: -4, y: 4 },
-        height: 3,
-        thickness: 0.2,
-      },
-      {
-        id: 'wall-4',
-        start: { x: -4, y: 4 },
-        end: { x: -4, y: -4 },
-        height: 3,
-        thickness: 0.2,
-      },
-    ];
   }
 
   private _cleanup(): void {
@@ -243,6 +263,8 @@ export class ViewportComponent implements OnDestroy {
       this._scene.clear();
       this._scene = undefined;
     }
+
+    this._wallsGroup.clear();
 
     this._controls?.dispose();
     this._controls = undefined;
