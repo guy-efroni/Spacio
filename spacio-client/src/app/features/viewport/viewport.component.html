@@ -1,6 +1,7 @@
 <div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()"></div>
 <div class="viewport-toolbar">
   <div class="viewport-toolbar__counter">Walls: {{ floorplanService.walls().length }}</div>
+  <div class="viewport-toolbar__counter">Area: {{ floorplanService.roomArea() | number:'1.0-2' }} m²</div>
   <button
     type="button"
     class="viewport-toolbar__button"
