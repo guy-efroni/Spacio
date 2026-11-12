@@ -111,18 +111,6 @@ export class ViewportComponent implements OnDestroy {
     directionalLight.shadow.bias = -0.0005;
     this._scene.add(directionalLight);
 
-    const testGeometry: THREE.BoxGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const testMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
-      color: 0x6366f1,
-      roughness: 0.3,
-      metalness: 0.1,
-    });
-    const testMesh: THREE.Mesh = new THREE.Mesh(testGeometry, testMaterial);
-    testMesh.position.set(0, 0.5, 0);
-    testMesh.castShadow = true;
-    testMesh.receiveShadow = true;
-    this._scene.add(testMesh);
-
     const planeGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(20, 20);
     const planeMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
       color: 0x1e1e3a,
