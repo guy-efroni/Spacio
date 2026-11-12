@@ -1,0 +1,8 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "instructions": [
+    ".kilorules",
+    "spacio-client/.kilorules",
+    "spacio-server/.kilorules"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "spacio",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "spacio-client",
+    "packages/shared-types"
+  ],
+  "scripts": {
+    "client:dev": "npm run start --workspace=spacio-client",
+    "client:build": "npm run build --workspace=spacio-client",
+    "shared:build": "npm run build --workspace=@spacio/shared-types",
+    "build:all": "npm run build --workspaces"
+  }
+}

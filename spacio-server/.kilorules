@@ -1,0 +1,16 @@
+# Spacio Server Rules (NestJS 12 & WebSockets)
+
+## 1. Directory Structure
+Enforce strict separation within `src/`:
+- `core/`: Global configurations, database providers, and Redis Pub/Sub adapters.
+- `shared/`: Shared DTOs, domain interfaces, custom decorators, and global filters/guards.
+- `gateway/`: Socket.io gateway handlers for multi-user scene state, cursor/presence sync, and room locking.
+- `modules/`: Feature modules (e.g., `spatial-parser`, `room-persistence`, `ai-generator`).
+
+## 2. NestJS 12 Standards
+- **Strongly Typed Payloads:** Validate all incoming WebSocket payloads and REST requests using `class-validator` and `class-transformer` decorated DTOs.
+- **Modular Gateways:** Keep Socket.io event listener methods lean by delegating transformation, spatial validation, and state persistence to injected domain services.
+- **Stateless Cloud Design:** Keep server memory lean and stateless to support deployment on Render free-tier infrastructure using Redis for room state distribution.
+
+## 3. Naming Conventions
+- **Private members:** Prefix every private property and method name with `_` (e.g., `_renderer`, `_setupScene()`).
