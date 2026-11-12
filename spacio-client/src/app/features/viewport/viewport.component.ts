@@ -7,6 +7,7 @@ import {
   inject,
 } from '@angular/core';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { IWallSegment } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 
@@ -23,6 +24,7 @@ export class ViewportComponent implements OnDestroy {
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
   private _camera?: THREE.PerspectiveCamera;
+  private _controls?: OrbitControls;
   private _animationFrameId?: number;
   private _resizeObserver?: ResizeObserver;
 
@@ -75,6 +77,13 @@ export class ViewportComponent implements OnDestroy {
     );
     this._camera.position.set(5, 3, 8);
     this._camera.lookAt(0, 0, 0);
+
+    this._controls = new OrbitControls(this._camera, this._renderer.domElement);
+    this._controls.enableDamping = true;
+    this._controls.dampingFactor = 0.05;
+    this._controls.maxPolarAngle = Math.PI / 2 - 0.01;
+    this._controls.minDistance = 2;
+    this._controls.maxDistance = 50;
 
     this._setupScene();
   }
@@ -144,6 +153,7 @@ export class ViewportComponent implements OnDestroy {
   private _render(): void {
     if (!this._renderer || !this._scene || !this._camera) return;
 
+    this._controls?.update();
     this._renderer.render(this._scene, this._camera);
   }
 
@@ -245,6 +255,9 @@ export class ViewportComponent implements OnDestroy {
       this._scene.clear();
       this._scene = undefined;
     }
+
+    this._controls?.dispose();
+    this._controls = undefined;
 
     this._camera = undefined;
   }
