@@ -17,3 +17,5 @@ export const WALL_ID_SEPARATOR = '-';
 export const WALL_MESH_PREFIX = 'wall';
 export const BASEBOARD_MESH_PREFIX = 'baseboard';
 export const CROWN_MESH_PREFIX = 'crown';
+
+export const WALL_SELECTED_COLOR = 0x4a6cf7;

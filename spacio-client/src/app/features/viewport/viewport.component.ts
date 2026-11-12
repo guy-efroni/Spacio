@@ -58,6 +58,9 @@ import {
   WALL_PLACEMENT_EPSILON,
   WALL_PREVIEW_NAME,
   ViewportToolMode,
+  DELETE_KEY,
+  BACKSPACE_KEY,
+  IWallMeshUserData,
 } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
@@ -109,20 +112,24 @@ export class ViewportComponent implements OnDestroy {
   private readonly _onKeyDown: (event: KeyboardEvent) => void = (
     event: KeyboardEvent
   ) => this._handleKeyDown(event);
+  private readonly _onDoubleClick: (event: MouseEvent) => void = (
+    event: MouseEvent
+  ) => this._onCanvasDoubleClick(event);
 
   constructor() {
     this._wallsGroup.name = WALLS_ROOT_GROUP_NAME;
     effect(() => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
+      const selectedWallId: string | null = this.floorplanService.selectedWallId();
       if (!this._scene || !this._wallsGroup) return;
-      this._syncWalls(walls);
+      this._syncWalls(walls, selectedWallId);
     });
 
     afterNextRender(() => {
       this._initializeThreeJS();
       this._startAnimationLoop();
       this._setupResizeObserver();
-      this._syncWalls(this.floorplanService.walls());
+      this._syncWalls(this.floorplanService.walls(), this.floorplanService.selectedWallId());
     });
   }
 
@@ -282,13 +289,19 @@ export class ViewportComponent implements OnDestroy {
     const canvas: HTMLCanvasElement = this._renderer.domElement;
     canvas.addEventListener('pointerdown', this._onPointerDown);
     canvas.addEventListener('pointermove', this._onPointerMove);
+    canvas.addEventListener('dblclick', this._onDoubleClick);
     window.addEventListener('keydown', this._onKeyDown);
   }
 
   private _handlePointerDown(event: PointerEvent): void {
     if (event.button !== PRIMARY_POINTER_BUTTON) return;
-    if (!this.isDrawingMode()) return;
 
+    if (this.isDrawingMode()) {
+      this._handleDrawingPointerDown(event);
+    }
+  }
+
+  private _handleDrawingPointerDown(event: PointerEvent): void {
     const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
     if (!point) return;
 
@@ -317,6 +330,39 @@ export class ViewportComponent implements OnDestroy {
     this._finishDrawing();
   }
 
+  private _onCanvasDoubleClick(event: MouseEvent): void {
+    if (!this._renderer || !this._camera) return;
+    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this._raycaster.setFromCamera(this._mouse, this._camera);
+    const intersects: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObjects(
+      this._wallsGroup.children,
+      true
+    );
+
+    const isWallMesh = (
+      userData: Record<string, unknown>
+    ): userData is IWallMeshUserData => {
+      return (
+        typeof userData === 'object' &&
+        userData !== null &&
+        (userData as unknown as IWallMeshUserData).type === 'wall' &&
+        typeof (userData as unknown as IWallMeshUserData).id === 'string'
+      );
+    };
+
+    const selectedId: string | null =
+      intersects
+        .map((intersection: THREE.Intersection<THREE.Object3D>) => intersection.object.userData)
+        .find(isWallMesh)?.id ?? null;
+
+    this.floorplanService.selectWall(selectedId);
+  }
+
   private _handlePointerMove(event: PointerEvent): void {
     if (!this.isDrawingMode() || !this._drawingStartPoint) return;
     const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
@@ -328,6 +374,17 @@ export class ViewportComponent implements OnDestroy {
     if (event.key === ESCAPE_KEY && this.isDrawingMode()) {
       this._cancelDrawing();
     }
+
+    if ((event.key === DELETE_KEY || event.key === BACKSPACE_KEY) && !this.isDrawingMode()) {
+      this._onDeleteSelectedWall();
+    }
+  }
+
+  protected _onDeleteSelectedWall(): void {
+    const selectedId: string | null = this.floorplanService.selectedWallId();
+    if (!selectedId) return;
+    this.floorplanService.removeWall(selectedId);
+    this.floorplanService.selectWall(null);
   }
 
   private _finishDrawing(): void {
@@ -400,11 +457,11 @@ export class ViewportComponent implements OnDestroy {
     return `${WALL_MESH_PREFIX}${WALL_ID_SEPARATOR}${Date.now()}${WALL_ID_SEPARATOR}${Math.random().toString(36).slice(2, 7)}`;
   }
 
-  private _syncWalls(walls: ReadonlyArray<IWallSegment>): void {
+  private _syncWalls(walls: ReadonlyArray<IWallSegment>, selectedWallId: string | null = null): void {
     if (!this._wallsGroup) return;
     this._disposeWallsGroup();
 
-    const wallsMesh: THREE.Group = WallExtruder.createWallsMesh(walls);
+    const wallsMesh: THREE.Group = WallExtruder.createWallsMesh(walls, selectedWallId);
     while (wallsMesh.children.length > 0) {
       const child: THREE.Object3D = wallsMesh.children[0];
       this._wallsGroup.add(child);
@@ -480,6 +537,7 @@ export class ViewportComponent implements OnDestroy {
       const canvas: HTMLCanvasElement = this._renderer.domElement;
       canvas.removeEventListener('pointerdown', this._onPointerDown);
       canvas.removeEventListener('pointermove', this._onPointerMove);
+      canvas.removeEventListener('dblclick', this._onDoubleClick);
       window.removeEventListener('keydown', this._onKeyDown);
       if (canvas.parentElement) {
         canvas.parentElement.removeChild(canvas);

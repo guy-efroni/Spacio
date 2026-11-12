@@ -43,4 +43,6 @@ export const VIEWPORT_SHADOW_BIAS = -0.0005;
 
 export const WALL_PLACEMENT_EPSILON = 0.0001;
 export const ESCAPE_KEY = 'Escape';
+export const DELETE_KEY = 'Delete';
+export const BACKSPACE_KEY = 'Backspace';
 export const PRIMARY_POINTER_BUTTON = 0;
