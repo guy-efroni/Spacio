@@ -3,15 +3,21 @@ import {
   ElementRef,
   NgZone,
   OnDestroy,
+  WritableSignal,
   afterNextRender,
   effect,
   inject,
+  signal,
 } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { IWallSegment } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
+
+const WALL_HEIGHT = 3;
+const WALL_THICKNESS = 0.2;
+const GRID_SNAP = 0.5;
 
 @Component({
   selector: 'app-viewport',
@@ -23,6 +29,7 @@ export class ViewportComponent implements OnDestroy {
   private readonly _elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly _ngZone: NgZone = inject(NgZone);
   protected readonly floorplanService: FloorplanService = inject(FloorplanService);
+  protected readonly isDrawingMode: WritableSignal<boolean> = signal<boolean>(false);
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -32,10 +39,34 @@ export class ViewportComponent implements OnDestroy {
   private _resizeObserver?: ResizeObserver;
   private readonly _wallsGroup: THREE.Group = new THREE.Group();
 
+  private readonly _raycaster: THREE.Raycaster = new THREE.Raycaster();
+  private readonly _mouse: THREE.Vector2 = new THREE.Vector2();
+  private readonly _floorPlane: THREE.Plane = new THREE.Plane(
+    new THREE.Vector3(0, 1, 0),
+    0
+  );
+  private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
+
+  private _drawingStartPoint: { x: number; y: number } | null = null;
+  private _previewLine?: THREE.Line;
+  private _previewGeometry?: THREE.BufferGeometry;
+  private _previewMaterial?: THREE.LineBasicMaterial;
+
+  private readonly _onPointerDown: (event: PointerEvent) => void = (
+    event: PointerEvent
+  ) => this._handlePointerDown(event);
+  private readonly _onPointerMove: (event: PointerEvent) => void = (
+    event: PointerEvent
+  ) => this._handlePointerMove(event);
+  private readonly _onKeyDown: (event: KeyboardEvent) => void = (
+    event: KeyboardEvent
+  ) => this._handleKeyDown(event);
+
   constructor() {
     this._wallsGroup.name = 'walls-root';
     effect(() => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
+      if (!this._scene || !this._wallsGroup) return;
       this._syncWalls(walls);
     });
 
@@ -43,18 +74,14 @@ export class ViewportComponent implements OnDestroy {
       this._initializeThreeJS();
       this._startAnimationLoop();
       this._setupResizeObserver();
+      this._syncWalls(this.floorplanService.walls());
     });
   }
 
   protected _onAddInteriorWall(): void {
-    const wall: IWallSegment = {
-      id: `wall-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      start: { x: -2, y: 0 },
-      end: { x: 2, y: 0 },
-      height: 3,
-      thickness: 0.2,
-    };
-    this.floorplanService.addWall(wall);
+    this.isDrawingMode.set(true);
+    this._drawingStartPoint = null;
+    this._hidePreviewLine();
   }
 
   protected _onRemoveLastWall(): void {
@@ -62,6 +89,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   protected _onResetRoom(): void {
+    this._cancelDrawing();
     this.floorplanService.resetToDefaultRoom();
   }
 
@@ -79,14 +107,13 @@ export class ViewportComponent implements OnDestroy {
       powerPreference: 'high-performance',
     });
 
-    // Mount renderer's canvas directly to the container
     container.appendChild(this._renderer.domElement);
-
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    // Handle zero-dimension race condition on initial flex layout
-    const initialWidth: number = hostElement.clientWidth > 0 ? hostElement.clientWidth : window.innerWidth;
-    const initialHeight: number = hostElement.clientHeight > 0 ? hostElement.clientHeight : window.innerHeight - 48;
+    const initialWidth: number =
+      hostElement.clientWidth > 0 ? hostElement.clientWidth : window.innerWidth;
+    const initialHeight: number =
+      hostElement.clientHeight > 0 ? hostElement.clientHeight : window.innerHeight - 48;
 
     this._renderer.setSize(initialWidth, initialHeight);
     this._renderer.shadowMap.enabled = true;
@@ -115,6 +142,7 @@ export class ViewportComponent implements OnDestroy {
     this._controls.maxDistance = 50;
 
     this._setupScene();
+    this._setupInteractions();
   }
 
   private _setupScene(): void {
@@ -153,7 +181,144 @@ export class ViewportComponent implements OnDestroy {
     this._scene.add(plane);
 
     this._scene.add(this._wallsGroup);
+    this._setupPreviewLine();
     this._syncWalls(this.floorplanService.walls());
+  }
+
+  private _setupPreviewLine(): void {
+    if (!this._scene) return;
+    this._previewGeometry = new THREE.BufferGeometry();
+    this._previewGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(6), 3)
+    );
+    this._previewMaterial = new THREE.LineBasicMaterial({
+      color: 0x7aa2ff,
+      transparent: true,
+      opacity: 0.9,
+    });
+    this._previewLine = new THREE.Line(this._previewGeometry, this._previewMaterial);
+    this._previewLine.visible = false;
+    this._previewLine.name = 'wall-preview';
+    this._scene.add(this._previewLine);
+  }
+
+  private _setupInteractions(): void {
+    if (!this._renderer) return;
+    const canvas: HTMLCanvasElement = this._renderer.domElement;
+    canvas.addEventListener('pointerdown', this._onPointerDown);
+    canvas.addEventListener('pointermove', this._onPointerMove);
+    window.addEventListener('keydown', this._onKeyDown);
+  }
+
+  private _handlePointerDown(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    if (!this.isDrawingMode()) return;
+
+    const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+    if (!point) return;
+
+    if (!this._drawingStartPoint) {
+      this._drawingStartPoint = point;
+      this._updatePreviewLine(point, point);
+      return;
+    }
+
+    const start: { x: number; y: number } = this._drawingStartPoint;
+    const end: { x: number; y: number } = point;
+    const isZeroLength: boolean =
+      Math.abs(start.x - end.x) < 0.0001 && Math.abs(start.y - end.y) < 0.0001;
+    if (!isZeroLength) {
+      const wall: IWallSegment = {
+        id: this._generateWallId(),
+        start,
+        end,
+        height: WALL_HEIGHT,
+        thickness: WALL_THICKNESS,
+      };
+      this.floorplanService.addWall(wall);
+    }
+
+    this._finishDrawing();
+  }
+
+  private _handlePointerMove(event: PointerEvent): void {
+    if (!this.isDrawingMode() || !this._drawingStartPoint) return;
+    const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+    if (!point) return;
+    this._updatePreviewLine(this._drawingStartPoint, point);
+  }
+
+  private _handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.isDrawingMode()) {
+      this._cancelDrawing();
+    }
+  }
+
+  private _finishDrawing(): void {
+    this._drawingStartPoint = null;
+    this._hidePreviewLine();
+    this.isDrawingMode.set(false);
+  }
+
+  private _cancelDrawing(): void {
+    this._drawingStartPoint = null;
+    this._hidePreviewLine();
+    this.isDrawingMode.set(false);
+  }
+
+  private _getSnappedFloorPoint(event: PointerEvent): { x: number; y: number } | null {
+    if (!this._renderer || !this._camera) return null;
+    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this._raycaster.setFromCamera(this._mouse, this._camera);
+    const intersection: THREE.Vector3 | null = this._raycaster.ray.intersectPlane(
+      this._floorPlane,
+      this._intersectionPoint
+    );
+    if (!intersection) return null;
+
+    const x: number = this._snapToGrid(this._intersectionPoint.x);
+    const z: number = this._snapToGrid(this._intersectionPoint.z);
+    return { x, y: z };
+  }
+
+  private _snapToGrid(value: number): number {
+    return Math.round(value / GRID_SNAP) * GRID_SNAP;
+  }
+
+  private _updatePreviewLine(
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+  ): void {
+    if (!this._previewGeometry || !this._previewLine) return;
+    const positionAttribute: THREE.BufferAttribute = this._previewGeometry.getAttribute(
+      'position'
+    ) as THREE.BufferAttribute;
+    const array: Float32Array = positionAttribute.array as Float32Array;
+    array[0] = start.x;
+    array[1] = 0.02;
+    array[2] = start.y;
+    array[3] = end.x;
+    array[4] = 0.02;
+    array[5] = end.y;
+    positionAttribute.needsUpdate = true;
+    this._previewGeometry.computeBoundingSphere();
+    this._previewLine.visible = true;
+  }
+
+  private _hidePreviewLine(): void {
+    if (this._previewLine) {
+      this._previewLine.visible = false;
+    }
+  }
+
+  private _generateWallId(): string {
+    return `wall-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   }
 
   private _syncWalls(walls: ReadonlyArray<IWallSegment>): void {
@@ -233,8 +398,10 @@ export class ViewportComponent implements OnDestroy {
     }
 
     if (this._renderer) {
-      // Remove canvas from DOM safely
       const canvas: HTMLCanvasElement = this._renderer.domElement;
+      canvas.removeEventListener('pointerdown', this._onPointerDown);
+      canvas.removeEventListener('pointermove', this._onPointerMove);
+      window.removeEventListener('keydown', this._onKeyDown);
       if (canvas.parentElement) {
         canvas.parentElement.removeChild(canvas);
       }
@@ -265,6 +432,12 @@ export class ViewportComponent implements OnDestroy {
     }
 
     this._wallsGroup.clear();
+    this._previewGeometry?.dispose();
+    this._previewMaterial?.dispose();
+    this._previewGeometry = undefined;
+    this._previewMaterial = undefined;
+    this._previewLine = undefined;
+    this._drawingStartPoint = null;
 
     this._controls?.dispose();
     this._controls = undefined;

@@ -1,7 +1,17 @@
-<div class="viewport-container"></div>
+<div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()"></div>
 <div class="viewport-toolbar">
   <div class="viewport-toolbar__counter">Walls: {{ floorplanService.walls().length }}</div>
-  <button type="button" class="viewport-toolbar__button" (click)="_onAddInteriorWall()">Add Interior Wall</button>
+  <button
+    type="button"
+    class="viewport-toolbar__button"
+    [class.viewport-toolbar__button--active]="isDrawingMode()"
+    (click)="_onAddInteriorWall()"
+  >
+    {{ isDrawingMode() ? 'Click on grid to place wall...' : 'Add Wall' }}
+  </button>
   <button type="button" class="viewport-toolbar__button" (click)="_onRemoveLastWall()">Undo / Remove Last Wall</button>
   <button type="button" class="viewport-toolbar__button viewport-toolbar__button--accent" (click)="_onResetRoom()">Reset Room</button>
 </div>
+@if (isDrawingMode()) {
+  <div class="viewport-toolbar__hint">First click: start point, second: place wall. Press Esc to cancel.</div>
+}
