@@ -134,7 +134,7 @@ export class ViewportComponent implements OnDestroy {
     event: MouseEvent
   ) => this._onCanvasDoubleClick(event);
 
-  constructor() {
+  public constructor() {
     this._wallsGroup.name = WALLS_ROOT_GROUP_NAME;
     this._floorsGroup.name = 'room-floors';
     effect(() => {
@@ -179,7 +179,7 @@ export class ViewportComponent implements OnDestroy {
     this.floorplanService.clearAllWalls();
   }
 
-  ngOnDestroy(): void {
+  public ngOnDestroy(): void {
     this._cleanup();
   }
 

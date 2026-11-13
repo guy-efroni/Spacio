@@ -6,8 +6,8 @@ import {
   IWallSegment,
 } from '@spacio/shared-types';
 
-const POINT_KEY_PRECISION = 3;
-const MIN_LOOP_AREA = 1e-6;
+const POINT_KEY_PRECISION: number = 3;
+const MIN_LOOP_AREA: number = 1e-6;
 
 type FloorPolygon = { points: readonly { x: number; y: number }[]; area: number } | null;
 
@@ -16,22 +16,22 @@ export class FloorplanService {
   private readonly _walls: WritableSignal<IWallSegment[]> = signal<IWallSegment[]>(
     this._createDefaultRoom()
   );
-  readonly walls: Signal<readonly IWallSegment[]> = this._walls.asReadonly();
+  public readonly walls: Signal<readonly IWallSegment[]> = this._walls.asReadonly();
 
   private readonly _selectedWallId: WritableSignal<string | null> = signal<string | null>(null);
-  readonly selectedWallId: Signal<string | null> = this._selectedWallId.asReadonly();
+  public readonly selectedWallId: Signal<string | null> = this._selectedWallId.asReadonly();
 
   private readonly _floorPolygon = computed<FloorPolygon>(() => this._computeFloorPolygon(this._walls()));
-  readonly floorPolygon: Signal<readonly { x: number; y: number }[] | null> = computed(
+  public readonly floorPolygon: Signal<readonly { x: number; y: number }[] | null> = computed(
     () => this._floorPolygon()?.points ?? null
   );
-  readonly roomArea: Signal<number> = computed(() => this._floorPolygon()?.area ?? 0);
+  public readonly roomArea: Signal<number> = computed(() => this._floorPolygon()?.area ?? 0);
 
-  addWall(wall: IWallSegment): void {
+  public addWall(wall: IWallSegment): void {
     this._walls.update((walls: IWallSegment[]) => [...walls, wall]);
   }
 
-  removeWall(id: string): void {
+  public removeWall(id: string): void {
     const wasSelected: boolean = this._selectedWallId() === id;
     this._walls.update((walls: IWallSegment[]) => walls.filter((wall: IWallSegment) => wall.id !== id));
     if (wasSelected) {
@@ -39,7 +39,7 @@ export class FloorplanService {
     }
   }
 
-  removeLastWall(): void {
+  public removeLastWall(): void {
     const walls: IWallSegment[] = this._walls();
     const removedWall: IWallSegment | undefined = walls[walls.length - 1];
     if (removedWall && this._selectedWallId() === removedWall.id) {
@@ -48,16 +48,16 @@ export class FloorplanService {
     this._walls.update((walls: IWallSegment[]) => walls.slice(0, -1));
   }
 
-  selectWall(id: string | null): void {
+  public selectWall(id: string | null): void {
     this._selectedWallId.set(id);
   }
 
-  resetToDefaultRoom(): void {
+  public resetToDefaultRoom(): void {
     this._walls.set(this._createDefaultRoom());
     this._selectedWallId.set(null);
   }
 
-  clearAllWalls(): void {
+  public clearAllWalls(): void {
     this._walls.set([]);
     this._selectedWallId.set(null);
   }
