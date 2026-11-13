@@ -1,132 +1,149 @@
-<aside class="property-inspector" [class.property-inspector--collapsed]="!selectedWall()">
-  <header class="property-inspector__header">
-    <h2 class="property-inspector__title">Properties</h2>
+<aside class="inspector-panel">
+  <header class="inspector-panel__header">
+    <div class="inspector-panel__title-group">
+      <span class="inspector-panel__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+          <path d="M3 9h18" />
+          <path d="M3 15h18" />
+        </svg>
+      </span>
+      <div class="inspector-panel__title-text">
+        <h2 class="inspector-panel__title">Wall Properties</h2>
+        <p class="inspector-panel__subtitle">#{{ wallIdSuffix() }}</p>
+      </div>
+    </div>
+    <button
+      type="button"
+      class="inspector-panel__close"
+      (click)="onDeselect()"
+      title="Deselect (Esc)"
+      aria-label="Deselect wall"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 6L6 18M6 6l12 12" />
+      </svg>
+    </button>
   </header>
 
-  @if (!selectedWall()) {
-    <div class="property-inspector__empty">
-      <svg class="property-inspector__empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-      </svg>
-      <p class="property-inspector__empty-text">Double-click any wall or object to inspect & customize</p>
+  <div class="inspector-panel__content">
+    <!-- Readout: Length -->
+    <div class="inspector-panel__section">
+      <div class="inspector-panel__readout">
+        <span class="inspector-panel__readout-label">Length</span>
+        <span class="inspector-panel__readout-value">{{ wallLength() | number:'1.0-2' }} m</span>
+      </div>
     </div>
-  } @else {
-    <form class="property-inspector__form" (ngSubmit)="false">
-      <div class="property-inspector__section">
-        <h3 class="property-inspector__section-title">Dimensions</h3>
 
-        <div class="property-inspector__field">
-          <label class="property-inspector__label" for="length">Length</label>
-          <div class="property-inspector__readonly">
-            <input
-              type="text"
-              id="length"
-              [value]="wallLength() | number:'1.0-2' + ' m'"
-              readonly
-              class="property-inspector__input property-inspector__input--readonly"
-            />
-          </div>
-        </div>
+    <!-- Controls: Height -->
+    <div class="inspector-panel__section">
+      <label class="inspector-panel__control-label" for="height">Height</label>
+      <div class="inspector-panel__control-row">
+        <input
+          type="number"
+          id="height"
+          class="inspector-panel__input"
+          [value]="height()"
+          (input)="onHeightChange($event.target.valueAsNumber)"
+          [min]="minHeight"
+          [max]="maxHeight"
+          [step]="heightStep"
+          aria-label="Wall height in meters"
+        />
+        <span class="inspector-panel__unit">m</span>
+      </div>
+      <input
+        type="range"
+        class="inspector-panel__slider"
+        [value]="height()"
+        (input)="onHeightChange($event.target.valueAsNumber)"
+        [min]="minHeight"
+        [max]="maxHeight"
+        [step]="heightStep"
+        aria-label="Wall height slider"
+      />
+    </div>
 
-        <div class="property-inspector__field">
-          <label class="property-inspector__label" for="height">Height (m)</label>
-          <div class="property-inspector__input-group">
-            <input
-              type="number"
-              id="height"
-              [value]="height()"
-              (input)="onHeightChange($event.target.valueAsNumber)"
-              [min]="minHeight"
-              [max]="maxHeight"
-              [step]="heightStep"
-              class="property-inspector__input"
-            />
-            <input
-              type="range"
-              [value]="height()"
-              (input)="onHeightChange($event.target.valueAsNumber)"
-              [min]="minHeight"
-              [max]="maxHeight"
-              [step]="heightStep"
-              class="property-inspector__slider"
-            />
-          </div>
-        </div>
+    <!-- Controls: Thickness -->
+    <div class="inspector-panel__section">
+      <label class="inspector-panel__control-label" for="thickness">Thickness</label>
+      <div class="inspector-panel__control-row">
+        <input
+          type="number"
+          id="thickness"
+          class="inspector-panel__input"
+          [value]="thickness()"
+          (input)="onThicknessChange($event.target.valueAsNumber)"
+          [min]="minThickness"
+          [max]="maxThickness"
+          [step]="thicknessStep"
+          aria-label="Wall thickness in meters"
+        />
+        <span class="inspector-panel__unit">m</span>
+      </div>
+      <input
+        type="range"
+        class="inspector-panel__slider"
+        [value]="thickness()"
+        (input)="onThicknessChange($event.target.valueAsNumber)"
+        [min]="minThickness"
+        [max]="maxThickness"
+        [step]="thicknessStep"
+        aria-label="Wall thickness slider"
+      />
+    </div>
 
-        <div class="property-inspector__field">
-          <label class="property-inspector__label" for="thickness">Thickness (m)</label>
-          <div class="property-inspector__input-group">
-            <input
-              type="number"
-              id="thickness"
-              [value]="thickness()"
-              (input)="onThicknessChange($event.target.valueAsNumber)"
-              [min]="minThickness"
-              [max]="maxThickness"
-              [step]="thicknessStep"
-              class="property-inspector__input"
-            />
-            <input
-              type="range"
-              [value]="thickness()"
-              (input)="onThicknessChange($event.target.valueAsNumber)"
-              [min]="minThickness"
-              [max]="maxThickness"
-              [step]="thicknessStep"
-              class="property-inspector__slider"
-            />
-          </div>
-        </div>
+    <!-- Color Customization -->
+    <div class="inspector-panel__section inspector-panel__section--color">
+      <label class="inspector-panel__control-label">Color</label>
+
+      <div class="inspector-panel__color-picker-row">
+        <input
+          type="color"
+          id="color"
+          class="inspector-panel__color-input"
+          [value]="color()"
+          (input)="onColorChange($event.target.value)"
+          title="Custom color"
+          aria-label="Wall color picker"
+        />
+        <span class="inspector-panel__color-swatch" [style.background-color]="color()"></span>
       </div>
 
-      <div class="property-inspector__section">
-        <h3 class="property-inspector__section-title">Appearance</h3>
-
-        <div class="property-inspector__field">
-          <label class="property-inspector__label" for="color">Color</label>
-          <div class="property-inspector__color-row">
-            <input
-              type="color"
-              id="color"
-              [value]="color()"
-              (input)="onColorChange($event.target.value)"
-              class="property-inspector__color-picker"
-              title="Custom color"
-            />
-            <span class="property-inspector__color-swatch" [style.background-color]="color()"></span>
-          </div>
-        </div>
-
-        <div class="property-inspector__field">
-          <span class="property-inspector__label">Presets</span>
-          <div class="property-inspector__presets">
-            @for (preset of colorPresets; track preset.value) {
-              <button
-                type="button"
-                class="property-inspector__preset"
-                [class.property-inspector__preset--active]="color() === preset.value"
-                [style.background-color]="preset.value"
-                (click)="onColorChange(preset.value)"
-                [title]="preset.name"
-              ></button>
-            }
-          </div>
-        </div>
+      <div class="inspector-panel__presets" role="group" aria-label="Color presets">
+        @for (preset of colorPresets; track preset.value) {
+          <button
+            type="button"
+            class="inspector-panel__preset"
+            [class.inspector-panel__preset--active]="color() === preset.value"
+            [style.background-color]="preset.value"
+            (click)="onColorChange(preset.value)"
+            [title]="preset.name"
+            [attr.aria-label]="preset.name"
+            [attr.aria-pressed]="color() === preset.value"
+          ></button>
+        }
       </div>
+    </div>
 
-      <div class="property-inspector__actions">
-        <button
-          type="button"
-          class="property-inspector__button property-inspector__button--danger"
-          (click)="onDeleteWall()"
-        >
-          <svg class="property-inspector__button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-          </svg>
-          Delete Wall
-        </button>
-      </div>
-    </form>
-  }
+    <!-- Divider before actions -->
+    <div class="inspector-panel__divider"></div>
+
+    <!-- Actions: Delete Wall -->
+    <div class="inspector-panel__actions">
+      <button
+        type="button"
+        class="inspector-panel__button inspector-panel__button--danger"
+        (click)="onDeleteWall()"
+      >
+        <svg class="inspector-panel__button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+        </svg>
+        <span>Delete Wall</span>
+      </button>
+    </div>
+  </div>
 </aside>

@@ -33,24 +33,10 @@
         </svg>
         <span>Reset</span>
       </button>
-      <button
-        type="button"
-        class="app-header__button app-header__button--icon"
-        (click)="toggleInspector()"
-        [attr.aria-expanded]="isInspectorOpen()"
-        [attr.aria-label]="isInspectorOpen() ? 'Hide inspector' : 'Show inspector'"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="3" width="7" height="7" rx="1" />
-          <rect x="3" y="14" width="7" height="7" rx="1" />
-          <rect x="14" y="14" width="7" height="7" rx="1" />
-        </svg>
-      </button>
     </div>
   </header>
 
-  <main class="app-main" [class.app-main--inspector-collapsed]="!isInspectorOpen()">
+  <main class="app-main">
     <div class="app-floating-toolbar" [class.app-floating-toolbar--active]="viewportComponent.isDrawingModePublic()">
       <div class="app-floating-toolbar__group">
         <button
@@ -146,8 +132,8 @@
       <app-viewport #viewportComponent></app-viewport>
     </section>
 
-    @if (isInspectorOpen()) {
-      <aside class="app-inspector-host">
+    @if (floorplanService.selectedWallId()) {
+      <aside class="app-inspector-panel">
         <app-property-inspector></app-property-inspector>
       </aside>
     }

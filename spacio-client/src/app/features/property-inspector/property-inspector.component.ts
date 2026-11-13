@@ -2,8 +2,8 @@ import {
   Component,
   computed,
   inject,
-  input,
   signal,
+  effect,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
@@ -43,6 +43,13 @@ export class PropertyInspectorComponent {
     return Math.sqrt(dx * dx + dz * dz);
   });
 
+  protected readonly wallIdSuffix = computed(() => {
+    const wall = this.selectedWall();
+    if (!wall) return 'unknown';
+    const parts = wall.id.split('-');
+    return parts[parts.length - 1] ?? 'unknown';
+  });
+
   protected readonly height = signal<number>(DEFAULT_WALL_HEIGHT);
   protected readonly thickness = signal<number>(DEFAULT_WALL_THICKNESS);
   protected readonly color = signal<string>('#e2e8f0');
@@ -56,15 +63,15 @@ export class PropertyInspectorComponent {
   protected readonly thicknessStep = 0.05;
 
   constructor() {
-    const selectedId = this._floorplanService.selectedWallId();
-    if (selectedId) {
-      const wall = this._floorplanService.walls().find((w) => w.id === selectedId);
+    // Initialize from selected wall when component is created
+    effect(() => {
+      const wall = this.selectedWall();
       if (wall) {
         this.height.set(wall.height);
         this.thickness.set(wall.thickness);
         this.color.set(wall.color);
       }
-    }
+    });
   }
 
   protected onHeightChange(value: number): void {
@@ -89,6 +96,10 @@ export class PropertyInspectorComponent {
     if (id) {
       this._floorplanService.updateWallProperties(id, { color: value });
     }
+  }
+
+  protected onDeselect(): void {
+    this._floorplanService.selectWall(null);
   }
 
   protected onDeleteWall(): void {
