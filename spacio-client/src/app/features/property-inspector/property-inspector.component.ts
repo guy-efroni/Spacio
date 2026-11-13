@@ -1,5 +1,7 @@
 import {
   Component,
+  Signal,
+  WritableSignal,
   computed,
   inject,
   signal,
@@ -19,6 +21,8 @@ import {
   IWallSegment,
 } from '@spacio/shared-types';
 
+type WallColorPreset = { readonly name: string; readonly value: string };
+
 @Component({
   selector: 'app-property-inspector',
   standalone: true,
@@ -27,45 +31,47 @@ import {
   styleUrl: './property-inspector.component.scss',
 })
 export class PropertyInspectorComponent {
-  private readonly _floorplanService = inject(FloorplanService);
+  private readonly _floorplanService: FloorplanService = inject(FloorplanService);
 
-  protected readonly selectedWall = computed<IWallSegment | null>(() => {
-    const id = this._floorplanService.selectedWallId();
-    if (!id) return null;
-    return this._floorplanService.walls().find((w) => w.id === id) ?? null;
-  });
+  public readonly selectedWall: Signal<IWallSegment | null> = computed<IWallSegment | null>(
+    () => {
+      const id: string | null = this._floorplanService.selectedWallId();
+      if (!id) return null;
+      return this._floorplanService.walls().find((wall: IWallSegment) => wall.id === id) ?? null;
+    }
+  );
 
-  protected readonly wallLength = computed(() => {
-    const wall = this.selectedWall();
+  public readonly wallLength: Signal<number> = computed<number>(() => {
+    const wall: IWallSegment | null = this.selectedWall();
     if (!wall) return 0;
-    const dx = wall.end.x - wall.start.x;
-    const dz = wall.end.y - wall.start.y;
+    const dx: number = wall.end.x - wall.start.x;
+    const dz: number = wall.end.y - wall.start.y;
     return Math.sqrt(dx * dx + dz * dz);
   });
 
-  protected readonly wallIdSuffix = computed(() => {
-    const wall = this.selectedWall();
+  public readonly wallIdSuffix: Signal<string> = computed<string>(() => {
+    const wall: IWallSegment | null = this.selectedWall();
     if (!wall) return 'unknown';
-    const parts = wall.id.split('-');
+    const parts: string[] = wall.id.split('-');
     return parts[parts.length - 1] ?? 'unknown';
   });
 
-  protected readonly height = signal<number>(DEFAULT_WALL_HEIGHT);
-  protected readonly thickness = signal<number>(DEFAULT_WALL_THICKNESS);
-  protected readonly color = signal<string>('#e2e8f0');
+  public readonly height: WritableSignal<number> = signal<number>(DEFAULT_WALL_HEIGHT);
+  public readonly thickness: WritableSignal<number> = signal<number>(DEFAULT_WALL_THICKNESS);
+  public readonly color: WritableSignal<string> = signal<string>('#e2e8f0');
 
-  protected readonly colorPresets = WALL_COLOR_PRESETS;
-  protected readonly minHeight = MIN_WALL_HEIGHT;
-  protected readonly maxHeight = MAX_WALL_HEIGHT;
-  protected readonly minThickness = MIN_WALL_THICKNESS;
-  protected readonly maxThickness = MAX_WALL_THICKNESS;
-  protected readonly heightStep = 0.1;
-  protected readonly thicknessStep = 0.05;
+  public readonly colorPresets: readonly WallColorPreset[] = WALL_COLOR_PRESETS;
+  public readonly minHeight: number = MIN_WALL_HEIGHT;
+  public readonly maxHeight: number = MAX_WALL_HEIGHT;
+  public readonly minThickness: number = MIN_WALL_THICKNESS;
+  public readonly maxThickness: number = MAX_WALL_THICKNESS;
+  public readonly heightStep: number = 0.1;
+  public readonly thicknessStep: number = 0.05;
 
-  constructor() {
+  public constructor() {
     // Initialize from selected wall when component is created
-    effect(() => {
-      const wall = this.selectedWall();
+    effect((): void => {
+      const wall: IWallSegment | null = this.selectedWall();
       if (wall) {
         this.height.set(wall.height);
         this.thickness.set(wall.thickness);
@@ -74,36 +80,36 @@ export class PropertyInspectorComponent {
     });
   }
 
-  protected onHeightChange(value: number): void {
+  public onHeightChange(value: number): void {
     this.height.set(value);
-    const id = this._floorplanService.selectedWallId();
+    const id: string | null = this._floorplanService.selectedWallId();
     if (id) {
       this._floorplanService.updateWallProperties(id, { height: value });
     }
   }
 
-  protected onThicknessChange(value: number): void {
+  public onThicknessChange(value: number): void {
     this.thickness.set(value);
-    const id = this._floorplanService.selectedWallId();
+    const id: string | null = this._floorplanService.selectedWallId();
     if (id) {
       this._floorplanService.updateWallProperties(id, { thickness: value });
     }
   }
 
-  protected onColorChange(value: string): void {
+  public onColorChange(value: string): void {
     this.color.set(value);
-    const id = this._floorplanService.selectedWallId();
+    const id: string | null = this._floorplanService.selectedWallId();
     if (id) {
       this._floorplanService.updateWallProperties(id, { color: value });
     }
   }
 
-  protected onDeselect(): void {
+  public onDeselect(): void {
     this._floorplanService.selectWall(null);
   }
 
-  protected onDeleteWall(): void {
-    const id = this._floorplanService.selectedWallId();
+  public onDeleteWall(): void {
+    const id: string | null = this._floorplanService.selectedWallId();
     if (id) {
       this._floorplanService.removeWall(id);
     }
