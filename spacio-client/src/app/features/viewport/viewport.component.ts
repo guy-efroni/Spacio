@@ -9,6 +9,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import {
@@ -48,6 +49,11 @@ import {
   VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET,
   VIEWPORT_PREVIEW_LINE_OPACITY,
   VIEWPORT_RENDERER_POWER_PREFERENCE,
+  VIEWPORT_ROOM_FLOOR_COLOR,
+  VIEWPORT_ROOM_FLOOR_HEIGHT_OFFSET,
+  VIEWPORT_ROOM_FLOOR_METALNESS,
+  VIEWPORT_ROOM_FLOOR_OPACITY,
+  VIEWPORT_ROOM_FLOOR_ROUGHNESS,
   VIEWPORT_SHADOW_BIAS,
   VIEWPORT_SHADOW_CAMERA_EXTENT,
   VIEWPORT_SHADOW_CAMERA_FAR,
@@ -75,6 +81,7 @@ const DEFAULT_INITIAL_HEIGHT =
 @Component({
   selector: 'app-viewport',
   standalone: true,
+  imports: [DecimalPipe],
   templateUrl: './viewport.component.html',
   styleUrl: './viewport.component.scss',
 })
@@ -91,6 +98,10 @@ export class ViewportComponent implements OnDestroy {
   private _animationFrameId?: number;
   private _resizeObserver?: ResizeObserver;
   private readonly _wallsGroup: THREE.Group = new THREE.Group();
+  private readonly _floorsGroup: THREE.Group = new THREE.Group();
+
+  private _floorMesh?: THREE.Mesh;
+  private _floorMaterial?: THREE.MeshStandardMaterial;
 
   private readonly _raycaster: THREE.Raycaster = new THREE.Raycaster();
   private readonly _mouse: THREE.Vector2 = new THREE.Vector2();
@@ -101,6 +112,8 @@ export class ViewportComponent implements OnDestroy {
   private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
 
   private _drawingStartPoint: { x: number; y: number } | null = null;
+  protected readonly ghostBadgeLength: WritableSignal<string> = signal<string>('');
+  protected readonly ghostBadgePosition: WritableSignal<{ x: number; y: number } | null> = signal<{ x: number; y: number } | null>(null);
   private _previewLine?: THREE.Line;
   private _previewGeometry?: THREE.BufferGeometry;
   private _previewMaterial?: THREE.LineBasicMaterial;
@@ -121,13 +134,20 @@ export class ViewportComponent implements OnDestroy {
     event: MouseEvent
   ) => this._onCanvasDoubleClick(event);
 
-  constructor() {
+  public constructor() {
     this._wallsGroup.name = WALLS_ROOT_GROUP_NAME;
+    this._floorsGroup.name = 'room-floors';
     effect(() => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
       const selectedWallId: string | null = this.floorplanService.selectedWallId();
       if (!this._scene || !this._wallsGroup) return;
       this._syncWalls(walls, selectedWallId);
+    });
+
+    effect(() => {
+      if (!this._scene || !this._floorsGroup) return;
+      const polygon: readonly { x: number; y: number }[] | null = this.floorplanService.floorPolygon();
+      this._syncFloors(polygon);
     });
 
     afterNextRender(() => {
@@ -154,7 +174,12 @@ export class ViewportComponent implements OnDestroy {
     this.floorplanService.resetToDefaultRoom();
   }
 
-  ngOnDestroy(): void {
+  protected _onClearAllWalls(): void {
+    this._cancelDrawing();
+    this.floorplanService.clearAllWalls();
+  }
+
+  public ngOnDestroy(): void {
     this._cleanup();
   }
 
@@ -267,9 +292,11 @@ export class ViewportComponent implements OnDestroy {
     plane.receiveShadow = true;
     this._scene.add(plane);
 
+    this._scene.add(this._floorsGroup);
     this._scene.add(this._wallsGroup);
     this._setupPreviewLine();
     this._syncWalls(this.floorplanService.walls());
+    this._syncFloors(this.floorplanService.floorPolygon());
   }
 
   private _setupPreviewLine(): void {
@@ -376,6 +403,7 @@ export class ViewportComponent implements OnDestroy {
     if (!point) return;
     this._updatePreviewLine(this._drawingStartPoint, point);
     this._updateGhostWallMesh(this._drawingStartPoint, point);
+    this._updateGhostBadge(this._drawingStartPoint, point);
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {
@@ -399,6 +427,7 @@ export class ViewportComponent implements OnDestroy {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
     this._removeGhostWallMesh();
+    this._hideGhostBadge();
     this._setToolMode(ViewportToolMode.View);
   }
 
@@ -406,6 +435,7 @@ export class ViewportComponent implements OnDestroy {
     this._drawingStartPoint = null;
     this._hidePreviewLine();
     this._removeGhostWallMesh();
+    this._hideGhostBadge();
     this._setToolMode(ViewportToolMode.View);
   }
 
@@ -435,6 +465,40 @@ export class ViewportComponent implements OnDestroy {
 
   private _snapToGrid(value: number): number {
     return Math.round(value / VIEWPORT_GRID_SNAP) * VIEWPORT_GRID_SNAP;
+  }
+
+  private _projectToScreen(x: number, y: number, z: number): { x: number; y: number } | null {
+    if (!this._renderer || !this._camera) return null;
+    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    const vector: THREE.Vector3 = new THREE.Vector3(x, y, z);
+    vector.project(this._camera);
+    const screenX: number = (vector.x * 0.5 + 0.5) * rect.width + rect.left;
+    const screenY: number = (-(vector.y * 0.5) + 0.5) * rect.height + rect.top;
+    return { x: screenX, y: screenY };
+  }
+
+  private _updateGhostBadge(start: { x: number; y: number }, end: { x: number; y: number }): void {
+    if (!this._camera) return;
+    const dx: number = end.x - start.x;
+    const dz: number = end.y - start.y;
+    const length: number = Math.hypot(dx, dz);
+    const midX: number = (start.x + end.x) / 2;
+    const midZ: number = (start.y + end.y) / 2;
+    const projection: { x: number; y: number } | null = this._projectToScreen(
+      midX,
+      VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET + 0.5,
+      midZ
+    );
+    if (!projection) return;
+    this.ghostBadgeLength.set(`${length.toFixed(1)}m`);
+    this.ghostBadgePosition.set(projection);
+  }
+
+  private _hideGhostBadge(): void {
+    this.ghostBadgeLength.set('');
+    this.ghostBadgePosition.set(null);
   }
 
   private _updatePreviewLine(
@@ -564,6 +628,55 @@ export class ViewportComponent implements OnDestroy {
     this._wallsGroup.clear();
   }
 
+  private _syncFloors(polygon: readonly { x: number; y: number }[] | null): void {
+    if (!this._scene || !this._floorsGroup) return;
+
+    if (this._floorMesh) {
+      this._floorsGroup.remove(this._floorMesh);
+      this._floorMesh.geometry.dispose();
+      this._floorMaterial?.dispose();
+      this._floorMesh = undefined;
+      this._floorMaterial = undefined;
+    }
+
+    if (!polygon || polygon.length < 3) {
+      return;
+    }
+
+    const validPoints: { x: number; y: number }[] = [];
+    for (const point of polygon) {
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+        return;
+      }
+      validPoints.push(point);
+    }
+    if (validPoints.length < 3) {
+      return;
+    }
+
+    const shape: THREE.Shape = new THREE.Shape();
+    shape.moveTo(validPoints[0].x, validPoints[0].y);
+    for (let i: number = 1; i < validPoints.length; i++) {
+      shape.lineTo(validPoints[i].x, validPoints[i].y);
+    }
+
+    const geometry: THREE.ShapeGeometry = new THREE.ShapeGeometry(shape);
+    this._floorMaterial = new THREE.MeshStandardMaterial({
+      color: VIEWPORT_ROOM_FLOOR_COLOR,
+      transparent: true,
+      opacity: VIEWPORT_ROOM_FLOOR_OPACITY,
+      roughness: VIEWPORT_ROOM_FLOOR_ROUGHNESS,
+      metalness: VIEWPORT_ROOM_FLOOR_METALNESS,
+    });
+    const mesh: THREE.Mesh = new THREE.Mesh(geometry, this._floorMaterial);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = VIEWPORT_ROOM_FLOOR_HEIGHT_OFFSET;
+    mesh.receiveShadow = true;
+    mesh.name = 'room-floor';
+    this._floorsGroup.add(mesh);
+    this._floorMesh = mesh;
+  }
+
   private _startAnimationLoop(): void {
     this._ngZone.runOutsideAngular(() => {
       const animate = (): void => {
@@ -651,6 +764,13 @@ export class ViewportComponent implements OnDestroy {
     }
 
     this._wallsGroup.clear();
+    this._floorsGroup.traverse((object: THREE.Object3D) => {
+      if (object instanceof THREE.Mesh) {
+        object.geometry?.dispose();
+        object.material?.dispose();
+      }
+    });
+    this._floorsGroup.clear();
     this._removeGhostWallMesh();
     this._previewGeometry?.dispose();
     this._previewMaterial?.dispose();
