@@ -42,7 +42,7 @@
         <button
           type="button"
           class="app-floating-toolbar__button"
-          [class.app-floating-toolbar__button--active]="!viewportComponent.isDrawingModePublic()"
+          [class.app-floating-toolbar__button--active]="!viewportComponent.isDrawingModePublic() && !viewportComponent.isRulerModePublic()"
           (click)="viewportComponent.setToolMode(ViewportToolMode.View)"
           title="Select / Orbit (V)"
         >
@@ -65,6 +65,25 @@
             <path d="M3 12h18" />
             <path d="M12 3a6 6 0 016 6v6" />
             <path d="M12 21a6 6 0 01-6-6v-6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="app-floating-toolbar__button"
+          [class.app-floating-toolbar__button--active]="viewportComponent.isRulerModePublic()"
+          (click)="viewportComponent.onToggleRuler()"
+          title="Ruler / Measure (M)"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3h18v18H3z" />
+            <path d="M3 9h18" />
+            <path d="M3 15h18" />
+            <path d="M9 3v18" />
+            <path d="M15 3v18" />
+            <path d="M7 7l4 4" />
+            <path d="M13 7l4 4" />
+            <path d="M7 13l4 4" />
+            <path d="M13 13l4 4" />
           </svg>
         </button>
       </div>

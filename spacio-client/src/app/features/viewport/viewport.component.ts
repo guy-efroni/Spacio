@@ -69,6 +69,14 @@ import {
   DELETE_KEY,
   BACKSPACE_KEY,
   IWallMeshUserData,
+  RULER_LINE_COLOR,
+  RULER_LINE_OPACITY,
+  RULER_LINE_DASH_SIZE,
+  RULER_LINE_GAP_SIZE,
+  RULER_MARKER_COLOR,
+  RULER_MARKER_SIZE,
+  RULER_BADGE_HEIGHT_OFFSET,
+  RULER_MARKER_HEIGHT,
 } from '@spacio/shared-types';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
@@ -88,7 +96,9 @@ export class ViewportComponent implements OnDestroy {
   private readonly _ngZone: NgZone = inject(NgZone);
   protected readonly floorplanService: FloorplanService = inject(FloorplanService);
   protected readonly isDrawingMode: WritableSignal<boolean> = signal<boolean>(false);
+  protected readonly isRulerMode: WritableSignal<boolean> = signal<boolean>(false);
   public readonly isDrawingModePublic = this.isDrawingMode.asReadonly();
+  public readonly isRulerModePublic = this.isRulerMode.asReadonly();
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -119,6 +129,20 @@ export class ViewportComponent implements OnDestroy {
   private _ghostWallMesh: THREE.Mesh | null = null;
   private _ghostWallGeometry?: THREE.BoxGeometry;
   private _ghostWallMaterial?: THREE.MeshStandardMaterial;
+
+  // Ruler state
+  private _rulerStartPoint: { x: number; y: number } | null = null;
+  private _rulerEndPoint: { x: number; y: number } | null = null;
+  private _rulerLine?: THREE.Line;
+  private _rulerLineGeometry?: THREE.BufferGeometry;
+  private _rulerLineMaterial?: THREE.LineDashedMaterial;
+  private _rulerStartMarker?: THREE.Mesh;
+  private _rulerEndMarker?: THREE.Mesh;
+  private _rulerMarkerGeometry?: THREE.SphereGeometry;
+  private _rulerMarkerMaterial?: THREE.MeshBasicMaterial;
+  protected readonly rulerBadgeLength: WritableSignal<string> = signal<string>('');
+  protected readonly rulerBadgePosition: WritableSignal<{ x: number; y: number } | null> = signal<{ x: number; y: number } | null>(null);
+  private _rulerPhase: 'idle' | 'start' | 'measuring' = 'idle';
 
   private readonly _onPointerDown: (event: PointerEvent) => void = (
     event: PointerEvent
@@ -164,6 +188,14 @@ export class ViewportComponent implements OnDestroy {
     this._removeGhostWallMesh();
   }
 
+  public onToggleRuler(): void {
+    if (this.isRulerMode()) {
+      this._cancelRuler();
+    } else {
+      this._setToolMode(ViewportToolMode.Ruler);
+    }
+  }
+
   public onRemoveLastWall(): void {
     this.floorplanService.removeLastWall();
   }
@@ -191,6 +223,37 @@ export class ViewportComponent implements OnDestroy {
 
   public setToolMode(mode: ViewportToolMode): void {
     this._setToolMode(mode);
+  }
+
+  private _setToolMode(mode: ViewportToolMode): void {
+    const wasDrawing = this.isDrawingMode();
+    const wasRuler = this.isRulerMode();
+
+    this.isDrawingMode.set(mode === ViewportToolMode.DrawWall);
+    this.isRulerMode.set(mode === ViewportToolMode.Ruler);
+
+    if (wasDrawing && mode !== ViewportToolMode.DrawWall) {
+      this._cancelDrawingInternal();
+    }
+    if (wasRuler && mode !== ViewportToolMode.Ruler) {
+      this._cancelRulerInternal();
+    }
+  }
+
+  private _cancelDrawingInternal(): void {
+    this._drawingStartPoint = null;
+    this._hidePreviewLine();
+    this._removeGhostWallMesh();
+    this._hideGhostBadge();
+  }
+
+  private _cancelRulerInternal(): void {
+    this._rulerStartPoint = null;
+    this._rulerEndPoint = null;
+    this._rulerPhase = 'idle';
+    this._removeRulerLine();
+    this._removeRulerMarkers();
+    this._hideRulerBadge();
   }
 
   private _initializeThreeJS(): void {
@@ -341,6 +404,8 @@ export class ViewportComponent implements OnDestroy {
 
     if (this.isDrawingMode()) {
       this._handleDrawingPointerDown(event);
+    } else if (this.isRulerMode()) {
+      this._handleRulerPointerDown(event);
     }
   }
 
@@ -409,12 +474,17 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _handlePointerMove(event: PointerEvent): void {
-    if (!this.isDrawingMode() || !this._drawingStartPoint) return;
-    const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
-    if (!point) return;
-    this._updatePreviewLine(this._drawingStartPoint, point);
-    this._updateGhostWallMesh(this._drawingStartPoint, point);
-    this._updateGhostBadge(this._drawingStartPoint, point);
+    if (this.isDrawingMode() && this._drawingStartPoint) {
+      const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+      if (!point) return;
+      this._updatePreviewLine(this._drawingStartPoint, point);
+      this._updateGhostWallMesh(this._drawingStartPoint, point);
+      this._updateGhostBadge(this._drawingStartPoint, point);
+    } else if (this.isRulerMode() && this._rulerPhase !== 'idle') {
+      const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+      if (!point) return;
+      this._updateRulerPreview(point);
+    }
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {
@@ -422,7 +492,11 @@ export class ViewportComponent implements OnDestroy {
       this._cancelDrawing();
     }
 
-    if ((event.key === DELETE_KEY || event.key === BACKSPACE_KEY) && !this.isDrawingMode()) {
+    if (event.key === ESCAPE_KEY && this.isRulerMode()) {
+      this._cancelRuler();
+    }
+
+    if ((event.key === DELETE_KEY || event.key === BACKSPACE_KEY) && !this.isDrawingMode() && !this.isRulerMode()) {
       this.onDeleteSelectedWall();
     }
   }
@@ -436,15 +510,187 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _cancelDrawing(): void {
-    this._drawingStartPoint = null;
-    this._hidePreviewLine();
-    this._removeGhostWallMesh();
-    this._hideGhostBadge();
+    this._cancelDrawingInternal();
     this._setToolMode(ViewportToolMode.View);
   }
 
-  private _setToolMode(mode: ViewportToolMode): void {
-    this.isDrawingMode.set(mode === ViewportToolMode.DrawWall);
+  private _cancelRuler(): void {
+    this._cancelRulerInternal();
+    this._setToolMode(ViewportToolMode.View);
+  }
+
+  private _handleRulerPointerDown(event: PointerEvent): void {
+    const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+    if (!point) return;
+
+    if (this._rulerPhase === 'idle' || this._rulerPhase === 'start') {
+      // First click - set start point
+      this._rulerStartPoint = point;
+      this._rulerPhase = 'measuring';
+      this._createRulerLine(point, point);
+      this._createRulerMarkers(point);
+    } else if (this._rulerPhase === 'measuring') {
+      // Second click - lock end point
+      this._rulerEndPoint = point;
+      this._updateRulerLine(point);
+      this._updateRulerEndMarker(point);
+      this._rulerPhase = 'start'; // Ready for new measurement
+    }
+  }
+
+  private _updateRulerPreview(end: { x: number; y: number }): void {
+    if (!this._rulerStartPoint) return;
+
+    this._rulerEndPoint = end;
+    this._updateRulerLine(end);
+    this._updateRulerEndMarker(end);
+    this._updateRulerBadge(this._rulerStartPoint, end);
+  }
+
+  private _createRulerLine(start: { x: number; y: number }, end: { x: number; y: number }): void {
+    if (!this._scene) return;
+    this._removeRulerLine();
+
+    this._rulerLineGeometry = new THREE.BufferGeometry();
+    this._rulerLineGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(6), 3)
+    );
+
+    this._rulerLineMaterial = new THREE.LineDashedMaterial({
+      color: RULER_LINE_COLOR,
+      transparent: true,
+      opacity: RULER_LINE_OPACITY,
+      dashSize: RULER_LINE_DASH_SIZE,
+      gapSize: RULER_LINE_GAP_SIZE,
+      linewidth: 2,
+    });
+
+    this._rulerLine = new THREE.Line(this._rulerLineGeometry, this._rulerLineMaterial);
+    this._rulerLine.computeLineDistances();
+    this._rulerLine.name = 'ruler-line';
+    this._scene.add(this._rulerLine);
+
+    this._updateRulerLine(end);
+  }
+
+  private _updateRulerLine(end: { x: number; y: number }): void {
+    if (!this._rulerStartPoint || !this._rulerLineGeometry || !this._rulerLine || !this._rulerLineMaterial) return;
+
+    const start = this._rulerStartPoint;
+    const positionAttribute = this._rulerLineGeometry.getAttribute('position') as THREE.BufferAttribute;
+    const array = positionAttribute.array as Float32Array;
+
+    const yPos = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
+    array[0] = start.x;
+    array[1] = yPos;
+    array[2] = start.y;
+    array[3] = end.x;
+    array[4] = yPos;
+    array[5] = end.y;
+
+    positionAttribute.needsUpdate = true;
+    this._rulerLineGeometry.computeBoundingSphere();
+    this._rulerLine.computeLineDistances();
+    this._rulerLineMaterial.needsUpdate = true;
+    this._rulerLine.visible = true;
+  }
+
+  private _removeRulerLine(): void {
+    if (!this._rulerLine) return;
+    if (this._scene) {
+      this._scene.remove(this._rulerLine);
+    }
+    this._rulerLineGeometry?.dispose();
+    this._rulerLineMaterial?.dispose();
+    this._rulerLine = undefined;
+    this._rulerLineGeometry = undefined;
+    this._rulerLineMaterial = undefined;
+  }
+
+  private _createRulerMarkers(point: { x: number; y: number }): void {
+    if (!this._scene) return;
+    this._removeRulerMarkers();
+
+    this._rulerMarkerGeometry = new THREE.SphereGeometry(RULER_MARKER_SIZE, 16, 16);
+    this._rulerMarkerMaterial = new THREE.MeshBasicMaterial({
+      color: RULER_MARKER_COLOR,
+      transparent: true,
+      opacity: 0.9,
+    });
+
+    // Start marker
+    this._rulerStartMarker = new THREE.Mesh(this._rulerMarkerGeometry, this._rulerMarkerMaterial);
+    this._rulerStartMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
+    this._rulerStartMarker.name = 'ruler-start-marker';
+    this._rulerStartMarker.castShadow = false;
+    this._rulerStartMarker.receiveShadow = false;
+    this._scene.add(this._rulerStartMarker);
+
+    // End marker (initially at same position)
+    this._rulerEndMarker = new THREE.Mesh(this._rulerMarkerGeometry, this._rulerMarkerMaterial);
+    this._rulerEndMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
+    this._rulerEndMarker.name = 'ruler-end-marker';
+    this._rulerEndMarker.castShadow = false;
+    this._rulerEndMarker.receiveShadow = false;
+    this._scene.add(this._rulerEndMarker);
+  }
+
+  private _updateRulerEndMarker(point: { x: number; y: number }): void {
+    if (this._rulerEndMarker) {
+      this._rulerEndMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
+    }
+  }
+
+  private _removeRulerMarkers(): void {
+    if (this._rulerStartMarker) {
+      if (this._scene) {
+        this._scene.remove(this._rulerStartMarker);
+      }
+      this._rulerStartMarker.geometry?.dispose();
+      if (Array.isArray(this._rulerStartMarker.material)) {
+        this._rulerStartMarker.material.forEach((m: THREE.Material) => m.dispose());
+      } else {
+        this._rulerStartMarker.material?.dispose();
+      }
+      this._rulerStartMarker = undefined;
+    }
+    if (this._rulerEndMarker) {
+      if (this._scene) {
+        this._scene.remove(this._rulerEndMarker);
+      }
+      this._rulerEndMarker.geometry?.dispose();
+      if (Array.isArray(this._rulerEndMarker.material)) {
+        this._rulerEndMarker.material.forEach((m: THREE.Material) => m.dispose());
+      } else {
+        this._rulerEndMarker.material?.dispose();
+      }
+      this._rulerEndMarker = undefined;
+    }
+    this._rulerMarkerGeometry = undefined;
+    this._rulerMarkerMaterial = undefined;
+  }
+
+  private _updateRulerBadge(start: { x: number; y: number }, end: { x: number; y: number }): void {
+    if (!this._camera) return;
+    const dx = end.x - start.x;
+    const dz = end.y - start.y;
+    const length = Math.hypot(dx, dz);
+    const midX = (start.x + end.x) / 2;
+    const midZ = (start.y + end.y) / 2;
+    const projection = this._projectToScreen(
+      midX,
+      RULER_BADGE_HEIGHT_OFFSET,
+      midZ
+    );
+    if (!projection) return;
+    this.rulerBadgeLength.set(`${length.toFixed(2)}m`);
+    this.rulerBadgePosition.set(projection);
+  }
+
+  private _hideRulerBadge(): void {
+    this.rulerBadgeLength.set('');
+    this.rulerBadgePosition.set(null);
   }
 
   private _getSnappedFloorPoint(event: PointerEvent): { x: number; y: number } | null {
@@ -776,6 +1022,8 @@ export class ViewportComponent implements OnDestroy {
     });
     this._floorsGroup.clear();
     this._removeGhostWallMesh();
+    this._removeRulerLine();
+    this._removeRulerMarkers();
     this._previewGeometry?.dispose();
     this._previewMaterial?.dispose();
     this._previewGeometry = undefined;

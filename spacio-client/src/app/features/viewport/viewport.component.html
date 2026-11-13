@@ -1,4 +1,4 @@
-<div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()"></div>
+<div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()" [class.viewport-container--ruler]="isRulerMode()"></div>
 @if (isDrawingMode() && ghostBadgePosition()) {
   <div
     class="ghost-length-badge"
@@ -6,5 +6,14 @@
     [style.top.px]="ghostBadgePosition()!.y"
   >
     {{ ghostBadgeLength() }}
+  </div>
+}
+@if (isRulerMode() && rulerBadgePosition()) {
+  <div
+    class="ruler-length-badge"
+    [style.left.px]="rulerBadgePosition()!.x"
+    [style.top.px]="rulerBadgePosition()!.y"
+  >
+    {{ rulerBadgeLength() }}
   </div>
 }

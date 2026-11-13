@@ -38,6 +38,15 @@ export const VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET = 0.02;
 export const VIEWPORT_GHOST_WALL_COLOR = 0x818cf8;
 export const VIEWPORT_GHOST_WALL_OPACITY = 0.4;
 
+export const RULER_LINE_COLOR = 0xfbbf24;
+export const RULER_LINE_OPACITY = 0.9;
+export const RULER_LINE_DASH_SIZE = 0.2;
+export const RULER_LINE_GAP_SIZE = 0.15;
+export const RULER_MARKER_COLOR = 0xfbbf24;
+export const RULER_MARKER_SIZE = 0.15;
+export const RULER_MARKER_HEIGHT = 0.3;
+export const RULER_BADGE_HEIGHT_OFFSET = 0.6;
+
 export const VIEWPORT_RENDERER_POWER_PREFERENCE: WebGLPowerPreference = 'high-performance';
 export const VIEWPORT_MAX_PIXEL_RATIO = 2;
 export const VIEWPORT_TONE_MAPPING_EXPOSURE = 1.0;
