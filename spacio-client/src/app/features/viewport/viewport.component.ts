@@ -21,6 +21,7 @@ import {
   VIEWPORT_AMBIENT_LIGHT_COLOR,
   VIEWPORT_AMBIENT_LIGHT_INTENSITY,
   VIEWPORT_BACKGROUND_COLOR,
+  VIEWPORT_CLICK_DRAG_THRESHOLD_PX,
   VIEWPORT_CAMERA_FAR,
   VIEWPORT_CAMERA_FOV,
   VIEWPORT_CAMERA_LOOK_AT,
@@ -41,6 +42,9 @@ import {
   VIEWPORT_GRID_DIVISIONS,
   VIEWPORT_GRID_SIZE,
   VIEWPORT_GRID_SNAP,
+  VIEWPORT_HEMISPHERE_LIGHT_GROUND_COLOR,
+  VIEWPORT_HEMISPHERE_LIGHT_INTENSITY,
+  VIEWPORT_HEMISPHERE_LIGHT_SKY_COLOR,
   VIEWPORT_MAX_DISTANCE,
   VIEWPORT_MAX_PIXEL_RATIO,
   VIEWPORT_MIN_DISTANCE,
@@ -121,6 +125,7 @@ export class ViewportComponent implements OnDestroy {
   private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
 
   private _drawingStartPoint: { x: number; y: number } | null = null;
+  private _pointerDownPosition: { x: number; y: number } | null = null;
   protected readonly ghostBadgeLength: WritableSignal<string> = signal<string>('');
   protected readonly ghostBadgePosition: WritableSignal<{ x: number; y: number } | null> = signal<{ x: number; y: number } | null>(null);
   private _previewLine?: THREE.Line;
@@ -150,6 +155,12 @@ export class ViewportComponent implements OnDestroy {
   private readonly _onPointerMove: (event: PointerEvent) => void = (
     event: PointerEvent
   ) => this._handlePointerMove(event);
+  private readonly _onPointerUp: (event: PointerEvent) => void = (
+    event: PointerEvent
+  ) => this._handlePointerUp(event);
+  private readonly _onPointerCancel: () => void = () => {
+    this._pointerDownPosition = null;
+  };
   private readonly _onKeyDown: (event: KeyboardEvent) => void = (
     event: KeyboardEvent
   ) => this._handleKeyDown(event);
@@ -238,6 +249,11 @@ export class ViewportComponent implements OnDestroy {
     if (wasRuler && mode !== ViewportToolMode.Ruler) {
       this._cancelRulerInternal();
     }
+
+    // A wall being drawn or measured must never carry a stale selection highlight.
+    if (mode !== ViewportToolMode.View) {
+      this.floorplanService.selectWall(null);
+    }
   }
 
   private _cancelDrawingInternal(): void {
@@ -277,8 +293,14 @@ export class ViewportComponent implements OnDestroy {
     this._renderer.setSize(initialWidth, initialHeight);
     this._renderer.shadowMap.enabled = true;
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Treat every material color as sRGB and write sRGB back out, so a wall's hex value is
+    // round-tripped untouched instead of being converted twice.
+    THREE.ColorManagement.enabled = true;
     this._renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // Neutral tone mapping only compresses highlights and leaves hues alone, unlike ACES
+    // which desaturates midtones. Exposure compensates the 1/PI falloff of the diffuse BRDF
+    // so a lit wall lands close to its Property Inspector swatch.
+    this._renderer.toneMapping = THREE.NeutralToneMapping;
     this._renderer.toneMappingExposure = VIEWPORT_TONE_MAPPING_EXPOSURE;
 
     this._scene = new THREE.Scene();
@@ -328,6 +350,13 @@ export class ViewportComponent implements OnDestroy {
       VIEWPORT_AMBIENT_LIGHT_INTENSITY
     );
     this._scene.add(ambientLight);
+
+    const hemisphereLight: THREE.HemisphereLight = new THREE.HemisphereLight(
+      VIEWPORT_HEMISPHERE_LIGHT_SKY_COLOR,
+      VIEWPORT_HEMISPHERE_LIGHT_GROUND_COLOR,
+      VIEWPORT_HEMISPHERE_LIGHT_INTENSITY
+    );
+    this._scene.add(hemisphereLight);
 
     const directionalLight: THREE.DirectionalLight = new THREE.DirectionalLight(
       VIEWPORT_DIRECTIONAL_LIGHT_COLOR,
@@ -395,6 +424,8 @@ export class ViewportComponent implements OnDestroy {
     const canvas: HTMLCanvasElement = this._renderer.domElement;
     canvas.addEventListener('pointerdown', this._onPointerDown);
     canvas.addEventListener('pointermove', this._onPointerMove);
+    canvas.addEventListener('pointerup', this._onPointerUp);
+    canvas.addEventListener('pointercancel', this._onPointerCancel);
     canvas.addEventListener('dblclick', this._onDoubleClick);
     window.addEventListener('keydown', this._onKeyDown);
   }
@@ -402,11 +433,39 @@ export class ViewportComponent implements OnDestroy {
   private _handlePointerDown(event: PointerEvent): void {
     if (event.button !== PRIMARY_POINTER_BUTTON) return;
 
+    // Drawing and ruler modes own the pointer: selection is intentionally bypassed.
     if (this.isDrawingMode()) {
+      this._pointerDownPosition = null;
       this._handleDrawingPointerDown(event);
-    } else if (this.isRulerMode()) {
-      this._handleRulerPointerDown(event);
+      return;
     }
+
+    if (this.isRulerMode()) {
+      this._pointerDownPosition = null;
+      this._handleRulerPointerDown(event);
+      return;
+    }
+
+    this._pointerDownPosition = { x: event.clientX, y: event.clientY };
+  }
+
+  private _handlePointerUp(event: PointerEvent): void {
+    const downPosition: { x: number; y: number } | null = this._pointerDownPosition;
+    this._pointerDownPosition = null;
+
+    if (!downPosition || event.button !== PRIMARY_POINTER_BUTTON) return;
+    if (this.isDrawingMode() || this.isRulerMode()) return;
+
+    const dragDistance: number = Math.hypot(
+      event.clientX - downPosition.x,
+      event.clientY - downPosition.y
+    );
+    // Anything beyond the click threshold was an orbit drag, not a selection click.
+    if (dragDistance > VIEWPORT_CLICK_DRAG_THRESHOLD_PX) return;
+
+    // A wall hit selects it; empty floor/canvas clears the selection.
+    const wallId: string | null = this._pickWallId(event.clientX, event.clientY);
+    this.floorplanService.selectWall(wallId);
   }
 
   private _handleDrawingPointerDown(event: PointerEvent): void {
@@ -441,36 +500,37 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _onCanvasDoubleClick(event: MouseEvent): void {
-    if (!this._renderer || !this._camera) return;
-    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    // Never steal the pointer from an active drawing or ruler preview.
+    if (this.isDrawingMode() || this.isRulerMode()) return;
 
-    this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this.floorplanService.selectWall(this._pickWallId(event.clientX, event.clientY));
+  }
+
+  private _pickWallId(clientX: number, clientY: number): string | null {
+    if (!this._renderer || !this._camera) return null;
+
+    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    this._mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this._mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     this._raycaster.setFromCamera(this._mouse, this._camera);
-    const intersects: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObjects(
-      this._wallsGroup.children,
-      true
-    );
+    const intersections: readonly THREE.Intersection<THREE.Object3D>[] =
+      this._raycaster.intersectObjects(this._wallsGroup.children, true);
 
-    const isWallMesh = (
-      userData: Record<string, unknown>
-    ): userData is IWallMeshUserData => {
-      return (
-        typeof userData === 'object' &&
-        userData !== null &&
-        (userData as unknown as IWallMeshUserData).type === 'wall' &&
-        typeof (userData as unknown as IWallMeshUserData).id === 'string'
-      );
-    };
+    for (const intersection of intersections) {
+      const userData: Record<string, unknown> = intersection.object.userData;
+      if (this._isWallMeshUserData(userData)) {
+        return userData.id;
+      }
+    }
 
-    const selectedId: string | null =
-      intersects
-        .map((intersection: THREE.Intersection<THREE.Object3D>) => intersection.object.userData)
-        .find(isWallMesh)?.id ?? null;
+    return null;
+  }
 
-    this.floorplanService.selectWall(selectedId);
+  private _isWallMeshUserData(userData: Record<string, unknown>): userData is IWallMeshUserData {
+    return userData['type'] === 'wall' && typeof userData['id'] === 'string';
   }
 
   private _handlePointerMove(event: PointerEvent): void {
@@ -488,17 +548,39 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {
-    if (event.key === ESCAPE_KEY && this.isDrawingMode()) {
+    if (event.key === ESCAPE_KEY) {
+      this._handleEscape();
+      return;
+    }
+
+    if (event.key !== DELETE_KEY && event.key !== BACKSPACE_KEY) return;
+    if (this.isDrawingMode() || this.isRulerMode()) return;
+    if (this._isEditableTarget(event.target)) return;
+
+    this.onDeleteSelectedWall();
+  }
+
+  private _handleEscape(): void {
+    if (this.isDrawingMode()) {
       this._cancelDrawing();
     }
 
-    if (event.key === ESCAPE_KEY && this.isRulerMode()) {
+    if (this.isRulerMode()) {
       this._cancelRuler();
     }
 
-    if ((event.key === DELETE_KEY || event.key === BACKSPACE_KEY) && !this.isDrawingMode() && !this.isRulerMode()) {
-      this.onDeleteSelectedWall();
-    }
+    this.floorplanService.selectWall(null);
+  }
+
+  private _isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName: string = target.tagName;
+    return (
+      tagName === 'INPUT' ||
+      tagName === 'TEXTAREA' ||
+      tagName === 'SELECT' ||
+      target.isContentEditable
+    );
   }
 
   private _finishDrawing(): void {
@@ -866,7 +948,7 @@ export class ViewportComponent implements OnDestroy {
 
   private _disposeWallsGroup(): void {
     this._wallsGroup.traverse((object: THREE.Object3D) => {
-      if (object instanceof THREE.Mesh) {
+      if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
         object.geometry?.dispose();
         if (Array.isArray(object.material)) {
           object.material.forEach((material: THREE.Material) => material.dispose());
@@ -982,6 +1064,8 @@ export class ViewportComponent implements OnDestroy {
       const canvas: HTMLCanvasElement = this._renderer.domElement;
       canvas.removeEventListener('pointerdown', this._onPointerDown);
       canvas.removeEventListener('pointermove', this._onPointerMove);
+      canvas.removeEventListener('pointerup', this._onPointerUp);
+      canvas.removeEventListener('pointercancel', this._onPointerCancel);
       canvas.removeEventListener('dblclick', this._onDoubleClick);
       window.removeEventListener('keydown', this._onKeyDown);
       if (canvas.parentElement) {

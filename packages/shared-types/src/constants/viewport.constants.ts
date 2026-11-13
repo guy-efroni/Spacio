@@ -12,6 +12,9 @@ export const VIEWPORT_CAMERA_LOOK_AT = { x: 0, y: 0, z: 0 } as const;
 
 export const VIEWPORT_AMBIENT_LIGHT_COLOR = 0xffffff;
 export const VIEWPORT_AMBIENT_LIGHT_INTENSITY = 0.5;
+export const VIEWPORT_HEMISPHERE_LIGHT_SKY_COLOR = 0xffffff;
+export const VIEWPORT_HEMISPHERE_LIGHT_GROUND_COLOR = 0x444444;
+export const VIEWPORT_HEMISPHERE_LIGHT_INTENSITY = 1.2;
 export const VIEWPORT_DIRECTIONAL_LIGHT_COLOR = 0xffffff;
 export const VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY = 1.2;
 export const VIEWPORT_DIRECTIONAL_LIGHT_POSITION = { x: 5, y: 10, z: 7 } as const;
@@ -49,7 +52,7 @@ export const RULER_BADGE_HEIGHT_OFFSET = 0.6;
 
 export const VIEWPORT_RENDERER_POWER_PREFERENCE: WebGLPowerPreference = 'high-performance';
 export const VIEWPORT_MAX_PIXEL_RATIO = 2;
-export const VIEWPORT_TONE_MAPPING_EXPOSURE = 1.0;
+export const VIEWPORT_TONE_MAPPING_EXPOSURE = 1.7;
 export const VIEWPORT_CONTROLS_DAMPING_FACTOR = 0.05;
 
 export const VIEWPORT_SHADOW_MAP_SIZE = 2048;
@@ -63,3 +66,4 @@ export const ESCAPE_KEY = 'Escape';
 export const DELETE_KEY = 'Delete';
 export const BACKSPACE_KEY = 'Backspace';
 export const PRIMARY_POINTER_BUTTON = 0;
+export const VIEWPORT_CLICK_DRAG_THRESHOLD_PX = 4;

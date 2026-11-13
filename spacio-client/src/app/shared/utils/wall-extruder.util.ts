@@ -3,20 +3,19 @@ import {
   BASEBOARD_MESH_PREFIX,
   CROWN_MESH_PREFIX,
   IWallSegment,
-  TRIM_COLOR,
-  TRIM_HEIGHT,
-  TRIM_METALNESS,
-  TRIM_ROUGHNESS,
-  TRIM_THICKNESS,
   WALL_MESH_PREFIX,
   WALL_ROUGHNESS,
   WALL_METALNESS,
   WALLS_GROUP_NAME,
-  WALL_SELECTED_COLOR,
-  WALL_SELECTED_EMISSIVE_INTENSITY,
+  WALL_SELECTION_EDGE_OPACITY,
+  WALL_SELECTION_EDGE_PREFIX,
   WALL_SELECTION_OUTLINE_COLOR,
-  WALL_SELECTION_OUTLINE_WIDTH,
+  WALL_Z_FIGHT_OFFSET_EPSILON,
+  WALL_Z_FIGHT_THICKNESS_OFFSET_RATIO,
 } from '@spacio/shared-types';
+
+const TRIM_THICKNESS = 0.06;
+const TRIM_HEIGHT = 0.15;
 
 export class WallExtruder {
   private constructor() {}
@@ -32,21 +31,15 @@ export class WallExtruder {
       return group;
     }
 
-    const trimMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
-      color: TRIM_COLOR,
-      roughness: TRIM_ROUGHNESS,
-      metalness: TRIM_METALNESS,
-      side: THREE.DoubleSide,
-    });
-
-    const selectionOutlineMaterial: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial({
+    const selectionEdgeMaterial: THREE.LineBasicMaterial = new THREE.LineBasicMaterial({
       color: WALL_SELECTION_OUTLINE_COLOR,
       transparent: true,
-      opacity: 0.8,
-      side: THREE.BackSide,
+      opacity: WALL_SELECTION_EDGE_OPACITY,
+      depthWrite: false,
     });
 
-    for (const wall of walls) {
+    for (let index: number = 0; index < walls.length; index++) {
+      const wall: IWallSegment = walls[index];
       const { start, end, height, thickness, color, id }: IWallSegment = wall;
 
       const dx: number = end.x - start.x;
@@ -62,7 +55,18 @@ export class WallExtruder {
 
       const isSelected: boolean = id === selectedWallId;
 
-      const wallColor = new THREE.Color(color);
+      // Wall boxes of adjoining segments overlap at shared corners, which leaves their
+      // top/bottom and end faces exactly coplanar and produces Z-fighting. A deterministic
+      // sub-millimetre offset per wall index separates those planes without visibly
+      // changing the wall's real dimensions.
+      const zFightOffset: number = index * WALL_Z_FIGHT_OFFSET_EPSILON;
+      const renderedHeight: number = height + zFightOffset;
+      const renderedThickness: number = Math.max(
+        thickness - zFightOffset,
+        thickness * (1 - WALL_Z_FIGHT_THICKNESS_OFFSET_RATIO)
+      );
+
+      const wallColor: THREE.Color = new THREE.Color().setStyle(color, THREE.SRGBColorSpace);
       const wallMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
         color: wallColor,
         roughness: WALL_ROUGHNESS,
@@ -70,31 +74,15 @@ export class WallExtruder {
         side: THREE.DoubleSide,
       });
 
-      let effectiveMaterial: THREE.Material = wallMaterial;
-      let outlineMesh: THREE.Mesh | null = null;
-
-      if (isSelected) {
-        const selectedMaterial = wallMaterial.clone();
-        selectedMaterial.emissive = new THREE.Color(WALL_SELECTED_COLOR);
-        selectedMaterial.emissiveIntensity = WALL_SELECTED_EMISSIVE_INTENSITY;
-        selectedMaterial.side = THREE.DoubleSide;
-        effectiveMaterial = selectedMaterial;
-
-        const outlineGeometry = new THREE.BoxGeometry(
-          length + WALL_SELECTION_OUTLINE_WIDTH * 2,
-          height + WALL_SELECTION_OUTLINE_WIDTH * 2,
-          thickness + WALL_SELECTION_OUTLINE_WIDTH * 2
-        );
-        outlineMesh = new THREE.Mesh(outlineGeometry, selectionOutlineMaterial);
-        outlineMesh.position.set(midX, height / 2, midZ);
-        outlineMesh.rotation.y = -angle;
-        outlineMesh.name = `selection-outline-${id}`;
-        group.add(outlineMesh);
-      }
-
-      const wallGeometry: THREE.BoxGeometry = new THREE.BoxGeometry(length, height, thickness);
-      const wallMesh: THREE.Mesh = new THREE.Mesh(wallGeometry, effectiveMaterial);
-      wallMesh.position.set(midX, height / 2, midZ);
+      // The face color always stays exactly the wall's own paint; selection is conveyed by
+      // a thin edge outline added below instead of tinting the material.
+      const wallGeometry: THREE.BoxGeometry = new THREE.BoxGeometry(
+        length,
+        renderedHeight,
+        renderedThickness
+      );
+      const wallMesh: THREE.Mesh = new THREE.Mesh(wallGeometry, wallMaterial);
+      wallMesh.position.set(midX, renderedHeight / 2, midZ);
       wallMesh.rotation.y = -angle;
       wallMesh.castShadow = true;
       wallMesh.receiveShadow = true;
@@ -102,8 +90,20 @@ export class WallExtruder {
       wallMesh.userData = { id, type: 'wall' };
       group.add(wallMesh);
 
+      if (isSelected) {
+        const selectionEdges: THREE.LineSegments = new THREE.LineSegments(
+          new THREE.EdgesGeometry(wallGeometry),
+          selectionEdgeMaterial
+        );
+        selectionEdges.position.copy(wallMesh.position);
+        selectionEdges.rotation.copy(wallMesh.rotation);
+        selectionEdges.name = `${WALL_SELECTION_EDGE_PREFIX}-${id}`;
+        selectionEdges.renderOrder = 1;
+        group.add(selectionEdges);
+      }
+
       const baseboard: THREE.Mesh = WallExtruder._createTrimBox(
-        trimMaterial,
+        wallMaterial,
         length,
         TRIM_THICKNESS,
         TRIM_HEIGHT
@@ -116,12 +116,12 @@ export class WallExtruder {
       group.add(baseboard);
 
       const crown: THREE.Mesh = WallExtruder._createTrimBox(
-        trimMaterial,
+        wallMaterial,
         length,
         TRIM_THICKNESS,
         TRIM_HEIGHT
       );
-      crown.position.set(midX, height - TRIM_HEIGHT / 2, midZ);
+      crown.position.set(midX, renderedHeight - TRIM_HEIGHT / 2, midZ);
       crown.rotation.y = -angle;
       crown.castShadow = true;
       crown.receiveShadow = true;
