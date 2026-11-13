@@ -133,7 +133,7 @@ export class FloorplanService {
         continue;
       }
 
-      const [fromKey, toKey] = edge.split('->') as [string, string];
+      const [fromKey, toKey]: [string, string] = edge.split('->') as [string, string];
       const loopKeys: string[] = [fromKey, toKey];
 
       unusedEdges.delete(edge);
