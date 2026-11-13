@@ -4,4 +4,5 @@ export interface IWallSegment {
   end: { x: number; y: number };
   height: number;
   thickness: number;
+  color: string;
 }

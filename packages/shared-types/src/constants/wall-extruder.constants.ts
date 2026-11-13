@@ -1,4 +1,3 @@
-export const WALL_COLOR = 0xf5f5f0;
 export const WALL_ROUGHNESS = 0.75;
 export const WALL_METALNESS = 0.0;
 
@@ -19,3 +18,6 @@ export const BASEBOARD_MESH_PREFIX = 'baseboard';
 export const CROWN_MESH_PREFIX = 'crown';
 
 export const WALL_SELECTED_COLOR = 0x4a6cf7;
+export const WALL_SELECTED_EMISSIVE_INTENSITY = 0.35;
+export const WALL_SELECTION_OUTLINE_COLOR = 0x7aa2ff;
+export const WALL_SELECTION_OUTLINE_WIDTH = 0.02;

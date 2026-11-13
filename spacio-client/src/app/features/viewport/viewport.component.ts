@@ -9,12 +9,12 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
+  DEFAULT_WALL_COLOR,
   ESCAPE_KEY,
   IWallSegment,
   PRIMARY_POINTER_BUTTON,
@@ -43,8 +43,8 @@ import {
   VIEWPORT_GRID_SNAP,
   VIEWPORT_MAX_DISTANCE,
   VIEWPORT_MAX_PIXEL_RATIO,
-  VIEWPORT_MAX_POLAR_ANGLE,
   VIEWPORT_MIN_DISTANCE,
+  VIEWPORT_MAX_POLAR_ANGLE,
   VIEWPORT_PREVIEW_LINE_COLOR,
   VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET,
   VIEWPORT_PREVIEW_LINE_OPACITY,
@@ -73,15 +73,13 @@ import {
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
 
-const VIEWPORT_HEADER_OFFSET_PX = 48;
 const DEFAULT_INITIAL_WIDTH = typeof window !== 'undefined' ? window.innerWidth : 0;
-const DEFAULT_INITIAL_HEIGHT =
-  typeof window !== 'undefined' ? window.innerHeight - VIEWPORT_HEADER_OFFSET_PX : 0;
+const DEFAULT_INITIAL_HEIGHT = typeof window !== 'undefined' ? window.innerHeight : 0;
 
 @Component({
   selector: 'app-viewport',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [],
   templateUrl: './viewport.component.html',
   styleUrl: './viewport.component.scss',
 })
@@ -90,6 +88,7 @@ export class ViewportComponent implements OnDestroy {
   private readonly _ngZone: NgZone = inject(NgZone);
   protected readonly floorplanService: FloorplanService = inject(FloorplanService);
   protected readonly isDrawingMode: WritableSignal<boolean> = signal<boolean>(false);
+  public readonly isDrawingModePublic = this.isDrawingMode.asReadonly();
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -158,29 +157,40 @@ export class ViewportComponent implements OnDestroy {
     });
   }
 
-  protected _onAddInteriorWall(): void {
+  public onAddInteriorWall(): void {
     this._setToolMode(ViewportToolMode.DrawWall);
     this._drawingStartPoint = null;
     this._hidePreviewLine();
     this._removeGhostWallMesh();
   }
 
-  protected _onRemoveLastWall(): void {
+  public onRemoveLastWall(): void {
     this.floorplanService.removeLastWall();
   }
 
-  protected _onResetRoom(): void {
+  public onResetRoom(): void {
     this._cancelDrawing();
     this.floorplanService.resetToDefaultRoom();
   }
 
-  protected _onClearAllWalls(): void {
+  public onClearAllWalls(): void {
     this._cancelDrawing();
     this.floorplanService.clearAllWalls();
   }
 
+  public onDeleteSelectedWall(): void {
+    const selectedId: string | null = this.floorplanService.selectedWallId();
+    if (!selectedId) return;
+    this.floorplanService.removeWall(selectedId);
+    this.floorplanService.selectWall(null);
+  }
+
   public ngOnDestroy(): void {
     this._cleanup();
+  }
+
+  public setToolMode(mode: ViewportToolMode): void {
+    this._setToolMode(mode);
   }
 
   private _initializeThreeJS(): void {
@@ -357,6 +367,7 @@ export class ViewportComponent implements OnDestroy {
         end,
         height: DEFAULT_WALL_HEIGHT,
         thickness: DEFAULT_WALL_THICKNESS,
+        color: DEFAULT_WALL_COLOR,
       };
       this.floorplanService.addWall(wall);
     }
@@ -412,15 +423,8 @@ export class ViewportComponent implements OnDestroy {
     }
 
     if ((event.key === DELETE_KEY || event.key === BACKSPACE_KEY) && !this.isDrawingMode()) {
-      this._onDeleteSelectedWall();
+      this.onDeleteSelectedWall();
     }
-  }
-
-  protected _onDeleteSelectedWall(): void {
-    const selectedId: string | null = this.floorplanService.selectedWallId();
-    if (!selectedId) return;
-    this.floorplanService.removeWall(selectedId);
-    this.floorplanService.selectWall(null);
   }
 
   private _finishDrawing(): void {

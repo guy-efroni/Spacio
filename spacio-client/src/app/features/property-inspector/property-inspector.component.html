@@ -1,0 +1,132 @@
+<aside class="property-inspector" [class.property-inspector--collapsed]="!selectedWall()">
+  <header class="property-inspector__header">
+    <h2 class="property-inspector__title">Properties</h2>
+  </header>
+
+  @if (!selectedWall()) {
+    <div class="property-inspector__empty">
+      <svg class="property-inspector__empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+      <p class="property-inspector__empty-text">Double-click any wall or object to inspect & customize</p>
+    </div>
+  } @else {
+    <form class="property-inspector__form" (ngSubmit)="false">
+      <div class="property-inspector__section">
+        <h3 class="property-inspector__section-title">Dimensions</h3>
+
+        <div class="property-inspector__field">
+          <label class="property-inspector__label" for="length">Length</label>
+          <div class="property-inspector__readonly">
+            <input
+              type="text"
+              id="length"
+              [value]="wallLength() | number:'1.0-2' + ' m'"
+              readonly
+              class="property-inspector__input property-inspector__input--readonly"
+            />
+          </div>
+        </div>
+
+        <div class="property-inspector__field">
+          <label class="property-inspector__label" for="height">Height (m)</label>
+          <div class="property-inspector__input-group">
+            <input
+              type="number"
+              id="height"
+              [value]="height()"
+              (input)="onHeightChange($event.target.valueAsNumber)"
+              [min]="minHeight"
+              [max]="maxHeight"
+              [step]="heightStep"
+              class="property-inspector__input"
+            />
+            <input
+              type="range"
+              [value]="height()"
+              (input)="onHeightChange($event.target.valueAsNumber)"
+              [min]="minHeight"
+              [max]="maxHeight"
+              [step]="heightStep"
+              class="property-inspector__slider"
+            />
+          </div>
+        </div>
+
+        <div class="property-inspector__field">
+          <label class="property-inspector__label" for="thickness">Thickness (m)</label>
+          <div class="property-inspector__input-group">
+            <input
+              type="number"
+              id="thickness"
+              [value]="thickness()"
+              (input)="onThicknessChange($event.target.valueAsNumber)"
+              [min]="minThickness"
+              [max]="maxThickness"
+              [step]="thicknessStep"
+              class="property-inspector__input"
+            />
+            <input
+              type="range"
+              [value]="thickness()"
+              (input)="onThicknessChange($event.target.valueAsNumber)"
+              [min]="minThickness"
+              [max]="maxThickness"
+              [step]="thicknessStep"
+              class="property-inspector__slider"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="property-inspector__section">
+        <h3 class="property-inspector__section-title">Appearance</h3>
+
+        <div class="property-inspector__field">
+          <label class="property-inspector__label" for="color">Color</label>
+          <div class="property-inspector__color-row">
+            <input
+              type="color"
+              id="color"
+              [value]="color()"
+              (input)="onColorChange($event.target.value)"
+              class="property-inspector__color-picker"
+              title="Custom color"
+            />
+            <span class="property-inspector__color-swatch" [style.background-color]="color()"></span>
+          </div>
+        </div>
+
+        <div class="property-inspector__field">
+          <span class="property-inspector__label">Presets</span>
+          <div class="property-inspector__presets">
+            @for (preset of colorPresets; track preset.value) {
+              <button
+                type="button"
+                class="property-inspector__preset"
+                [class.property-inspector__preset--active]="color() === preset.value"
+                [style.background-color]="preset.value"
+                (click)="onColorChange(preset.value)"
+                [title]="preset.name"
+              ></button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="property-inspector__actions">
+        <button
+          type="button"
+          class="property-inspector__button property-inspector__button--danger"
+          (click)="onDeleteWall()"
+        >
+          <svg class="property-inspector__button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+          </svg>
+          Delete Wall
+        </button>
+      </div>
+    </form>
+  }
+</aside>

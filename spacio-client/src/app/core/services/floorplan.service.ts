@@ -2,6 +2,7 @@ import { Injectable, computed, Signal, WritableSignal, signal } from '@angular/c
 import {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
+  DEFAULT_WALL_COLOR,
   INITIAL_SQUARE_ROOM,
   IWallSegment,
 } from '@spacio/shared-types';
@@ -50,6 +51,17 @@ export class FloorplanService {
 
   public selectWall(id: string | null): void {
     this._selectedWallId.set(id);
+  }
+
+  public updateWallProperties(
+    id: string,
+    updates: Partial<Pick<IWallSegment, 'height' | 'thickness' | 'color'>>
+  ): void {
+    this._walls.update((walls: IWallSegment[]) =>
+      walls.map((wall: IWallSegment) =>
+        wall.id === id ? { ...wall, ...updates } : wall
+      )
+    );
   }
 
   public resetToDefaultRoom(): void {
