@@ -17,25 +17,290 @@
 }
 
 .app-header {
-  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
   flex-shrink: 0;
   background: #121212;
   color: #e5e7eb;
   border-bottom: 1px solid #27272a;
-  display: flex;
-  align-items: center;
-  padding-inline: 1rem;
+  padding-inline: 1.5rem;
   font-weight: 600;
   font-size: 1.125rem;
   letter-spacing: -0.01em;
+  z-index: 100;
 }
 
-.app-content {
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-header__logo {
+  width: 28px;
+  height: 28px;
+  color: #4a6cf7;
+}
+
+.app-header__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fafafa;
+}
+
+.app-header__stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.app-header__stat-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fafafa;
+}
+
+.app-header__stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a1a1aa;
+}
+
+.app-header__stat-divider {
+  width: 1px;
+  height: 24px;
+  background: #27272a;
+  margin: 0 8px;
+}
+
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header__button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  background: #1c1c22;
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: #27272a;
+    border-color: #52525b;
+  }
+
+  &:active {
+    background: #18181b;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.2);
+  }
+
+  &--icon {
+    padding: 8px;
+    gap: 0;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+}
+
+.app-main {
+  display: flex;
   flex: 1;
   position: relative;
   overflow: hidden;
-  display: block;
-  width: 100%;
-  height: 100%;
   background: #0a0a0a;
+}
+
+.app-floating-toolbar {
+  position: fixed;
+  left: 16px;
+  top: 88px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(20, 20, 24, 0.85);
+  border: 1px solid rgba(39, 39, 42, 0.6);
+  border-radius: 16px;
+  backdrop-filter: blur(12px) saturate(180%);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, box-shadow 0.2s ease;
+  animation: toolbarSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  @keyframes toolbarSlideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  &:hover {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+      0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  }
+}
+
+.app-floating-toolbar__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-floating-toolbar__divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(63, 63, 70, 0.5), transparent);
+  margin: 4px 6px;
+}
+
+.app-floating-toolbar__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #d4d4d8;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+
+  svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: rgba(39, 39, 42, 0.8);
+    color: #fafafa;
+    transform: scale(1.02);
+  }
+
+  &:active {
+    background: rgba(28, 28, 34, 0.9);
+    transform: scale(0.98);
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.25);
+  }
+
+  &--active {
+    background: linear-gradient(135deg, #4a6cf7 0%, #3b5bd9 100%);
+    color: #ffffff;
+    box-shadow:
+      0 2px 8px rgba(74, 108, 247, 0.4),
+      0 0 0 1px rgba(74, 108, 247, 0.3) inset;
+
+    &:hover {
+      background: linear-gradient(135deg, #5b7cff 0%, #4a6cf7 100%);
+      box-shadow:
+        0 4px 16px rgba(74, 108, 247, 0.5),
+        0 0 0 1px rgba(74, 108, 247, 0.4) inset;
+    }
+
+    &:active {
+      transform: scale(0.96);
+    }
+  }
+
+  &--danger {
+    color: #fca5a5;
+
+    &:hover:not(:disabled) {
+      background: rgba(60, 24, 24, 0.8);
+      border-color: rgba(69, 26, 26, 0.5);
+      color: #fecaca;
+    }
+
+    &:active:not(:disabled) {
+      background: rgba(42, 21, 21, 0.9);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+
+    &:hover {
+      background: transparent;
+      color: #71717a;
+    }
+  }
+}
+
+.app-inspector-panel {
+  position: fixed;
+  top: 88px;
+  right: 16px;
+  bottom: 16px;
+  width: 340px;
+  max-height: calc(100vh - 104px);
+  z-index: 40;
+  pointer-events: auto;
+  animation: inspectorSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  @keyframes inspectorSlideIn {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+}
+
+.app-viewport-host {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
 }

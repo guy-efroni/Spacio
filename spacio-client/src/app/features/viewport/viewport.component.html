@@ -1,30 +1,4 @@
-<div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()"></div>
-<div class="viewport-toolbar">
-  <div class="viewport-toolbar__counter">Walls: {{ floorplanService.walls().length }}</div>
-  <div class="viewport-toolbar__counter">Area: {{ floorplanService.roomArea() | number:'1.0-2' }} m²</div>
-  <button
-    type="button"
-    class="viewport-toolbar__button"
-    [class.viewport-toolbar__button--active]="isDrawingMode()"
-    (click)="_onAddInteriorWall()"
-  >
-    {{ isDrawingMode() ? 'Click on grid to place wall...' : 'Add Wall' }}
-  </button>
-  <button type="button" class="viewport-toolbar__button" (click)="_onRemoveLastWall()">Undo / Remove Last Wall</button>
-  <button
-    type="button"
-    class="viewport-toolbar__button"
-    [disabled]="!floorplanService.selectedWallId()"
-    (click)="_onDeleteSelectedWall()"
-  >
-    Delete Selected Wall
-  </button>
-  <button type="button" class="viewport-toolbar__button viewport-toolbar__button--accent" (click)="_onResetRoom()">Reset Room</button>
-  <button type="button" class="viewport-toolbar__button" (click)="_onClearAllWalls()">Clear All Walls</button>
-</div>
-@if (isDrawingMode()) {
-  <div class="viewport-toolbar__hint">First click: start point, second: place wall. Press Esc to cancel.</div>
-}
+<div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()" [class.viewport-container--ruler]="isRulerMode()"></div>
 @if (isDrawingMode() && ghostBadgePosition()) {
   <div
     class="ghost-length-badge"
@@ -34,6 +8,12 @@
     {{ ghostBadgeLength() }}
   </div>
 }
-@if (floorplanService.selectedWallId()) {
-  <div class="viewport-toolbar__hint">Wall selected. Press Delete or Backspace to remove.</div>
+@if (isRulerMode() && rulerBadgePosition()) {
+  <div
+    class="ruler-length-badge"
+    [style.left.px]="rulerBadgePosition()!.x"
+    [style.top.px]="rulerBadgePosition()!.y"
+  >
+    {{ rulerBadgeLength() }}
+  </div>
 }

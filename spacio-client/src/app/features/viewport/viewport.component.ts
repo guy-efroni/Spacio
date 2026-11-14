@@ -1,31 +1,43 @@
-import {
+﻿import {
   Component,
   ElementRef,
   NgZone,
   OnDestroy,
+  Signal,
   WritableSignal,
   afterNextRender,
   effect,
   inject,
   signal,
 } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
+  DEFAULT_WALL_COLOR,
   ESCAPE_KEY,
+  IRulerPoint,
+  IWallMeshUserData,
   IWallSegment,
+  POSITION_ATTRIBUTE_NAME,
   PRIMARY_POINTER_BUTTON,
+  ROOM_FLOOR_MESH_NAME,
+  ROOM_FLOORS_GROUP_NAME,
+  RULER_END_MARKER_NAME,
+  RULER_LINE_NAME,
+  RULER_START_MARKER_NAME,
+  RulerPhase,
   VIEWPORT_AMBIENT_LIGHT_COLOR,
   VIEWPORT_AMBIENT_LIGHT_INTENSITY,
   VIEWPORT_BACKGROUND_COLOR,
+  VIEWPORT_CLICK_DRAG_THRESHOLD_PX,
   VIEWPORT_CAMERA_FAR,
   VIEWPORT_CAMERA_FOV,
   VIEWPORT_CAMERA_LOOK_AT,
   VIEWPORT_CAMERA_NEAR,
   VIEWPORT_CAMERA_POSITION,
+  VIEWPORT_CONTAINER_SELECTOR,
   VIEWPORT_CONTROLS_DAMPING_FACTOR,
   VIEWPORT_DIRECTIONAL_LIGHT_COLOR,
   VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY,
@@ -41,10 +53,13 @@ import {
   VIEWPORT_GRID_DIVISIONS,
   VIEWPORT_GRID_SIZE,
   VIEWPORT_GRID_SNAP,
+  VIEWPORT_HEMISPHERE_LIGHT_GROUND_COLOR,
+  VIEWPORT_HEMISPHERE_LIGHT_INTENSITY,
+  VIEWPORT_HEMISPHERE_LIGHT_SKY_COLOR,
   VIEWPORT_MAX_DISTANCE,
   VIEWPORT_MAX_PIXEL_RATIO,
-  VIEWPORT_MAX_POLAR_ANGLE,
   VIEWPORT_MIN_DISTANCE,
+  VIEWPORT_MAX_POLAR_ANGLE,
   VIEWPORT_PREVIEW_LINE_COLOR,
   VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET,
   VIEWPORT_PREVIEW_LINE_OPACITY,
@@ -65,23 +80,30 @@ import {
   WALL_MESH_PREFIX,
   WALL_PLACEMENT_EPSILON,
   WALL_PREVIEW_NAME,
+  WALL_USER_DATA_TYPE,
+  WEBGL_LOSE_CONTEXT_EXTENSION,
   ViewportToolMode,
   DELETE_KEY,
   BACKSPACE_KEY,
-  IWallMeshUserData,
+  RULER_LINE_COLOR,
+  RULER_LINE_OPACITY,
+  RULER_LINE_DASH_SIZE,
+  RULER_LINE_GAP_SIZE,
+  RULER_MARKER_COLOR,
+  RULER_MARKER_SIZE,
+  RULER_BADGE_HEIGHT_OFFSET,
+  RULER_MARKER_HEIGHT,
 } from '@spacio/shared-types';
-import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
+import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 
-const VIEWPORT_HEADER_OFFSET_PX = 48;
-const DEFAULT_INITIAL_WIDTH = typeof window !== 'undefined' ? window.innerWidth : 0;
-const DEFAULT_INITIAL_HEIGHT =
-  typeof window !== 'undefined' ? window.innerHeight - VIEWPORT_HEADER_OFFSET_PX : 0;
+const DEFAULT_INITIAL_WIDTH: number = typeof window !== 'undefined' ? window.innerWidth : 0;
+const DEFAULT_INITIAL_HEIGHT: number = typeof window !== 'undefined' ? window.innerHeight : 0;
 
 @Component({
   selector: 'app-viewport',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [],
   templateUrl: './viewport.component.html',
   styleUrl: './viewport.component.scss',
 })
@@ -90,6 +112,9 @@ export class ViewportComponent implements OnDestroy {
   private readonly _ngZone: NgZone = inject(NgZone);
   protected readonly floorplanService: FloorplanService = inject(FloorplanService);
   protected readonly isDrawingMode: WritableSignal<boolean> = signal<boolean>(false);
+  protected readonly isRulerMode: WritableSignal<boolean> = signal<boolean>(false);
+  public readonly isDrawingModePublic: Signal<boolean> = this.isDrawingMode.asReadonly();
+  public readonly isRulerModePublic: Signal<boolean> = this.isRulerMode.asReadonly();
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -111,9 +136,10 @@ export class ViewportComponent implements OnDestroy {
   );
   private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
 
-  private _drawingStartPoint: { x: number; y: number } | null = null;
+  private _drawingStartPoint: IRulerPoint | null = null;
+  private _pointerDownPosition: IRulerPoint | null = null;
   protected readonly ghostBadgeLength: WritableSignal<string> = signal<string>('');
-  protected readonly ghostBadgePosition: WritableSignal<{ x: number; y: number } | null> = signal<{ x: number; y: number } | null>(null);
+  protected readonly ghostBadgePosition: WritableSignal<IRulerPoint | null> = signal<IRulerPoint | null>(null);
   private _previewLine?: THREE.Line;
   private _previewGeometry?: THREE.BufferGeometry;
   private _previewMaterial?: THREE.LineBasicMaterial;
@@ -121,12 +147,32 @@ export class ViewportComponent implements OnDestroy {
   private _ghostWallGeometry?: THREE.BoxGeometry;
   private _ghostWallMaterial?: THREE.MeshStandardMaterial;
 
+  // Ruler state
+  private _rulerStartPoint: IRulerPoint | null = null;
+  private _rulerEndPoint: IRulerPoint | null = null;
+  private _rulerLine?: THREE.Line;
+  private _rulerLineGeometry?: THREE.BufferGeometry;
+  private _rulerLineMaterial?: THREE.LineDashedMaterial;
+  private _rulerStartMarker?: THREE.Mesh;
+  private _rulerEndMarker?: THREE.Mesh;
+  private _rulerMarkerGeometry?: THREE.SphereGeometry;
+  private _rulerMarkerMaterial?: THREE.MeshBasicMaterial;
+  protected readonly rulerBadgeLength: WritableSignal<string> = signal<string>('');
+  protected readonly rulerBadgePosition: WritableSignal<IRulerPoint | null> = signal<IRulerPoint | null>(null);
+  private _rulerPhase: RulerPhase = RulerPhase.Idle;
+
   private readonly _onPointerDown: (event: PointerEvent) => void = (
     event: PointerEvent
   ) => this._handlePointerDown(event);
   private readonly _onPointerMove: (event: PointerEvent) => void = (
     event: PointerEvent
   ) => this._handlePointerMove(event);
+  private readonly _onPointerUp: (event: PointerEvent) => void = (
+    event: PointerEvent
+  ) => this._handlePointerUp(event);
+  private readonly _onPointerCancel: () => void = () => {
+    this._pointerDownPosition = null;
+  };
   private readonly _onKeyDown: (event: KeyboardEvent) => void = (
     event: KeyboardEvent
   ) => this._handleKeyDown(event);
@@ -136,7 +182,7 @@ export class ViewportComponent implements OnDestroy {
 
   public constructor() {
     this._wallsGroup.name = WALLS_ROOT_GROUP_NAME;
-    this._floorsGroup.name = 'room-floors';
+    this._floorsGroup.name = ROOM_FLOORS_GROUP_NAME;
     effect(() => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
       const selectedWallId: string | null = this.floorplanService.selectedWallId();
@@ -158,34 +204,89 @@ export class ViewportComponent implements OnDestroy {
     });
   }
 
-  protected _onAddInteriorWall(): void {
+  public onAddInteriorWall(): void {
     this._setToolMode(ViewportToolMode.DrawWall);
     this._drawingStartPoint = null;
     this._hidePreviewLine();
     this._removeGhostWallMesh();
   }
 
-  protected _onRemoveLastWall(): void {
+  public onToggleRuler(): void {
+    if (this.isRulerMode()) {
+      this._cancelRuler();
+    } else {
+      this._setToolMode(ViewportToolMode.Ruler);
+    }
+  }
+
+  public onRemoveLastWall(): void {
     this.floorplanService.removeLastWall();
   }
 
-  protected _onResetRoom(): void {
+  public onResetRoom(): void {
     this._cancelDrawing();
     this.floorplanService.resetToDefaultRoom();
   }
 
-  protected _onClearAllWalls(): void {
+  public onClearAllWalls(): void {
     this._cancelDrawing();
     this.floorplanService.clearAllWalls();
+  }
+
+  public onDeleteSelectedWall(): void {
+    const selectedId: string | null = this.floorplanService.selectedWallId();
+    if (!selectedId) return;
+    this.floorplanService.removeWall(selectedId);
+    this.floorplanService.selectWall(null);
   }
 
   public ngOnDestroy(): void {
     this._cleanup();
   }
 
+  public setToolMode(mode: ViewportToolMode): void {
+    this._setToolMode(mode);
+  }
+
+  private _setToolMode(mode: ViewportToolMode): void {
+    const wasDrawing: boolean = this.isDrawingMode();
+    const wasRuler: boolean = this.isRulerMode();
+
+    this.isDrawingMode.set(mode === ViewportToolMode.DrawWall);
+    this.isRulerMode.set(mode === ViewportToolMode.Ruler);
+
+    if (wasDrawing && mode !== ViewportToolMode.DrawWall) {
+      this._cancelDrawingInternal();
+    }
+    if (wasRuler && mode !== ViewportToolMode.Ruler) {
+      this._cancelRulerInternal();
+    }
+
+    // A wall being drawn or measured must never carry a stale selection highlight.
+    if (mode !== ViewportToolMode.View) {
+      this.floorplanService.selectWall(null);
+    }
+  }
+
+  private _cancelDrawingInternal(): void {
+    this._drawingStartPoint = null;
+    this._hidePreviewLine();
+    this._removeGhostWallMesh();
+    this._hideGhostBadge();
+  }
+
+  private _cancelRulerInternal(): void {
+    this._rulerStartPoint = null;
+    this._rulerEndPoint = null;
+    this._rulerPhase = RulerPhase.Idle;
+    this._removeRulerLine();
+    this._removeRulerMarkers();
+    this._hideRulerBadge();
+  }
+
   private _initializeThreeJS(): void {
     const hostElement: HTMLElement = this._elementRef.nativeElement;
-    const container: HTMLElement = hostElement.querySelector('.viewport-container')!;
+    const container: HTMLElement = hostElement.querySelector(VIEWPORT_CONTAINER_SELECTOR)!;
 
     this._renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -204,8 +305,14 @@ export class ViewportComponent implements OnDestroy {
     this._renderer.setSize(initialWidth, initialHeight);
     this._renderer.shadowMap.enabled = true;
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Treat every material color as sRGB and write sRGB back out, so a wall's hex value is
+    // round-tripped untouched instead of being converted twice.
+    THREE.ColorManagement.enabled = true;
     this._renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // Neutral tone mapping only compresses highlights and leaves hues alone, unlike ACES
+    // which desaturates midtones. Exposure compensates the 1/PI falloff of the diffuse BRDF
+    // so a lit wall lands close to its Property Inspector swatch.
+    this._renderer.toneMapping = THREE.NeutralToneMapping;
     this._renderer.toneMappingExposure = VIEWPORT_TONE_MAPPING_EXPOSURE;
 
     this._scene = new THREE.Scene();
@@ -256,6 +363,13 @@ export class ViewportComponent implements OnDestroy {
     );
     this._scene.add(ambientLight);
 
+    const hemisphereLight: THREE.HemisphereLight = new THREE.HemisphereLight(
+      VIEWPORT_HEMISPHERE_LIGHT_SKY_COLOR,
+      VIEWPORT_HEMISPHERE_LIGHT_GROUND_COLOR,
+      VIEWPORT_HEMISPHERE_LIGHT_INTENSITY
+    );
+    this._scene.add(hemisphereLight);
+
     const directionalLight: THREE.DirectionalLight = new THREE.DirectionalLight(
       VIEWPORT_DIRECTIONAL_LIGHT_COLOR,
       VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY
@@ -303,7 +417,7 @@ export class ViewportComponent implements OnDestroy {
     if (!this._scene) return;
     this._previewGeometry = new THREE.BufferGeometry();
     this._previewGeometry.setAttribute(
-      'position',
+      POSITION_ATTRIBUTE_NAME,
       new THREE.BufferAttribute(new Float32Array(6), 3)
     );
     this._previewMaterial = new THREE.LineBasicMaterial({
@@ -322,6 +436,8 @@ export class ViewportComponent implements OnDestroy {
     const canvas: HTMLCanvasElement = this._renderer.domElement;
     canvas.addEventListener('pointerdown', this._onPointerDown);
     canvas.addEventListener('pointermove', this._onPointerMove);
+    canvas.addEventListener('pointerup', this._onPointerUp);
+    canvas.addEventListener('pointercancel', this._onPointerCancel);
     canvas.addEventListener('dblclick', this._onDoubleClick);
     window.addEventListener('keydown', this._onKeyDown);
   }
@@ -329,9 +445,39 @@ export class ViewportComponent implements OnDestroy {
   private _handlePointerDown(event: PointerEvent): void {
     if (event.button !== PRIMARY_POINTER_BUTTON) return;
 
+    // Drawing and ruler modes own the pointer: selection is intentionally bypassed.
     if (this.isDrawingMode()) {
+      this._pointerDownPosition = null;
       this._handleDrawingPointerDown(event);
+      return;
     }
+
+    if (this.isRulerMode()) {
+      this._pointerDownPosition = null;
+      this._handleRulerPointerDown(event);
+      return;
+    }
+
+    this._pointerDownPosition = { x: event.clientX, y: event.clientY };
+  }
+
+  private _handlePointerUp(event: PointerEvent): void {
+    const downPosition: { x: number; y: number } | null = this._pointerDownPosition;
+    this._pointerDownPosition = null;
+
+    if (!downPosition || event.button !== PRIMARY_POINTER_BUTTON) return;
+    if (this.isDrawingMode() || this.isRulerMode()) return;
+
+    const dragDistance: number = Math.hypot(
+      event.clientX - downPosition.x,
+      event.clientY - downPosition.y
+    );
+    // Anything beyond the click threshold was an orbit drag, not a selection click.
+    if (dragDistance > VIEWPORT_CLICK_DRAG_THRESHOLD_PX) return;
+
+    // A wall hit selects it; empty floor/canvas clears the selection.
+    const wallId: string | null = this._pickWallId(event.clientX, event.clientY);
+    this.floorplanService.selectWall(wallId);
   }
 
   private _handleDrawingPointerDown(event: PointerEvent): void {
@@ -357,6 +503,7 @@ export class ViewportComponent implements OnDestroy {
         end,
         height: DEFAULT_WALL_HEIGHT,
         thickness: DEFAULT_WALL_THICKNESS,
+        color: DEFAULT_WALL_COLOR,
       };
       this.floorplanService.addWall(wall);
     }
@@ -365,62 +512,87 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _onCanvasDoubleClick(event: MouseEvent): void {
-    if (!this._renderer || !this._camera) return;
-    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    // Never steal the pointer from an active drawing or ruler preview.
+    if (this.isDrawingMode() || this.isRulerMode()) return;
 
-    this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this.floorplanService.selectWall(this._pickWallId(event.clientX, event.clientY));
+  }
+
+  private _pickWallId(clientX: number, clientY: number): string | null {
+    if (!this._renderer || !this._camera) return null;
+
+    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    this._mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this._mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     this._raycaster.setFromCamera(this._mouse, this._camera);
-    const intersects: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObjects(
-      this._wallsGroup.children,
-      true
-    );
+    const intersections: readonly THREE.Intersection<THREE.Object3D>[] =
+      this._raycaster.intersectObjects(this._wallsGroup.children, true);
 
-    const isWallMesh = (
-      userData: Record<string, unknown>
-    ): userData is IWallMeshUserData => {
-      return (
-        typeof userData === 'object' &&
-        userData !== null &&
-        (userData as unknown as IWallMeshUserData).type === 'wall' &&
-        typeof (userData as unknown as IWallMeshUserData).id === 'string'
-      );
-    };
+    for (const intersection of intersections) {
+      const userData: Record<string, unknown> = intersection.object.userData;
+      if (this._isWallMeshUserData(userData)) {
+        return userData.id;
+      }
+    }
 
-    const selectedId: string | null =
-      intersects
-        .map((intersection: THREE.Intersection<THREE.Object3D>) => intersection.object.userData)
-        .find(isWallMesh)?.id ?? null;
+    return null;
+  }
 
-    this.floorplanService.selectWall(selectedId);
+  private _isWallMeshUserData(userData: Record<string, unknown>): userData is IWallMeshUserData {
+    return userData['type'] === WALL_USER_DATA_TYPE && typeof userData['id'] === 'string';
   }
 
   private _handlePointerMove(event: PointerEvent): void {
-    if (!this.isDrawingMode() || !this._drawingStartPoint) return;
-    const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
-    if (!point) return;
-    this._updatePreviewLine(this._drawingStartPoint, point);
-    this._updateGhostWallMesh(this._drawingStartPoint, point);
-    this._updateGhostBadge(this._drawingStartPoint, point);
+    if (this.isDrawingMode() && this._drawingStartPoint) {
+      const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+      if (!point) return;
+      this._updatePreviewLine(this._drawingStartPoint, point);
+      this._updateGhostWallMesh(this._drawingStartPoint, point);
+      this._updateGhostBadge(this._drawingStartPoint, point);
+    } else if (this.isRulerMode() && this._rulerPhase !== RulerPhase.Idle) {
+      const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+      if (!point) return;
+      this._updateRulerPreview(point);
+    }
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {
-    if (event.key === ESCAPE_KEY && this.isDrawingMode()) {
+    if (event.key === ESCAPE_KEY) {
+      this._handleEscape();
+      return;
+    }
+
+    if (event.key !== DELETE_KEY && event.key !== BACKSPACE_KEY) return;
+    if (this.isDrawingMode() || this.isRulerMode()) return;
+    if (this._isEditableTarget(event.target)) return;
+
+    this.onDeleteSelectedWall();
+  }
+
+  private _handleEscape(): void {
+    if (this.isDrawingMode()) {
       this._cancelDrawing();
     }
 
-    if ((event.key === DELETE_KEY || event.key === BACKSPACE_KEY) && !this.isDrawingMode()) {
-      this._onDeleteSelectedWall();
+    if (this.isRulerMode()) {
+      this._cancelRuler();
     }
+
+    this.floorplanService.selectWall(null);
   }
 
-  protected _onDeleteSelectedWall(): void {
-    const selectedId: string | null = this.floorplanService.selectedWallId();
-    if (!selectedId) return;
-    this.floorplanService.removeWall(selectedId);
-    this.floorplanService.selectWall(null);
+  private _isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName: string = target.tagName;
+    return (
+      tagName === 'INPUT' ||
+      tagName === 'TEXTAREA' ||
+      tagName === 'SELECT' ||
+      target.isContentEditable
+    );
   }
 
   private _finishDrawing(): void {
@@ -432,15 +604,187 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _cancelDrawing(): void {
-    this._drawingStartPoint = null;
-    this._hidePreviewLine();
-    this._removeGhostWallMesh();
-    this._hideGhostBadge();
+    this._cancelDrawingInternal();
     this._setToolMode(ViewportToolMode.View);
   }
 
-  private _setToolMode(mode: ViewportToolMode): void {
-    this.isDrawingMode.set(mode === ViewportToolMode.DrawWall);
+  private _cancelRuler(): void {
+    this._cancelRulerInternal();
+    this._setToolMode(ViewportToolMode.View);
+  }
+
+  private _handleRulerPointerDown(event: PointerEvent): void {
+    const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+    if (!point) return;
+
+    if (this._rulerPhase === RulerPhase.Idle || this._rulerPhase === RulerPhase.Start) {
+      // First click - set start point
+      this._rulerStartPoint = point;
+      this._rulerPhase = RulerPhase.Measuring;
+      this._createRulerLine(point, point);
+      this._createRulerMarkers(point);
+    } else if (this._rulerPhase === RulerPhase.Measuring) {
+      // Second click - lock end point
+      this._rulerEndPoint = point;
+      this._updateRulerLine(point);
+      this._updateRulerEndMarker(point);
+      this._rulerPhase = RulerPhase.Start; // Ready for new measurement
+    }
+  }
+
+  private _updateRulerPreview(end: { x: number; y: number }): void {
+    if (!this._rulerStartPoint) return;
+
+    this._rulerEndPoint = end;
+    this._updateRulerLine(end);
+    this._updateRulerEndMarker(end);
+    this._updateRulerBadge(this._rulerStartPoint, end);
+  }
+
+  private _createRulerLine(start: { x: number; y: number }, end: { x: number; y: number }): void {
+    if (!this._scene) return;
+    this._removeRulerLine();
+
+    this._rulerLineGeometry = new THREE.BufferGeometry();
+    this._rulerLineGeometry.setAttribute(
+      POSITION_ATTRIBUTE_NAME,
+      new THREE.BufferAttribute(new Float32Array(6), 3)
+    );
+
+    this._rulerLineMaterial = new THREE.LineDashedMaterial({
+      color: RULER_LINE_COLOR,
+      transparent: true,
+      opacity: RULER_LINE_OPACITY,
+      dashSize: RULER_LINE_DASH_SIZE,
+      gapSize: RULER_LINE_GAP_SIZE,
+      linewidth: 2,
+    });
+
+    this._rulerLine = new THREE.Line(this._rulerLineGeometry, this._rulerLineMaterial);
+    this._rulerLine.computeLineDistances();
+    this._rulerLine.name = RULER_LINE_NAME;
+    this._scene.add(this._rulerLine);
+
+    this._updateRulerLine(end);
+  }
+
+  private _updateRulerLine(end: { x: number; y: number }): void {
+    if (!this._rulerStartPoint || !this._rulerLineGeometry || !this._rulerLine || !this._rulerLineMaterial) return;
+
+    const start: IRulerPoint = this._rulerStartPoint;
+    const positionAttribute: THREE.BufferAttribute = this._rulerLineGeometry.getAttribute('position') as THREE.BufferAttribute;
+    const array: Float32Array = positionAttribute.array as Float32Array;
+
+    const yPos: number = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
+    array[0] = start.x;
+    array[1] = yPos;
+    array[2] = start.y;
+    array[3] = end.x;
+    array[4] = yPos;
+    array[5] = end.y;
+
+    positionAttribute.needsUpdate = true;
+    this._rulerLineGeometry.computeBoundingSphere();
+    this._rulerLine.computeLineDistances();
+    this._rulerLineMaterial.needsUpdate = true;
+    this._rulerLine.visible = true;
+  }
+
+  private _removeRulerLine(): void {
+    if (!this._rulerLine) return;
+    if (this._scene) {
+      this._scene.remove(this._rulerLine);
+    }
+    this._rulerLineGeometry?.dispose();
+    this._rulerLineMaterial?.dispose();
+    this._rulerLine = undefined;
+    this._rulerLineGeometry = undefined;
+    this._rulerLineMaterial = undefined;
+  }
+
+  private _createRulerMarkers(point: { x: number; y: number }): void {
+    if (!this._scene) return;
+    this._removeRulerMarkers();
+
+    this._rulerMarkerGeometry = new THREE.SphereGeometry(RULER_MARKER_SIZE, 16, 16);
+    this._rulerMarkerMaterial = new THREE.MeshBasicMaterial({
+      color: RULER_MARKER_COLOR,
+      transparent: true,
+      opacity: 0.9,
+    });
+
+    // Start marker
+    this._rulerStartMarker = new THREE.Mesh(this._rulerMarkerGeometry, this._rulerMarkerMaterial);
+    this._rulerStartMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
+    this._rulerStartMarker.name = RULER_START_MARKER_NAME;
+    this._rulerStartMarker.castShadow = false;
+    this._rulerStartMarker.receiveShadow = false;
+    this._scene.add(this._rulerStartMarker);
+
+    // End marker (initially at same position)
+    this._rulerEndMarker = new THREE.Mesh(this._rulerMarkerGeometry, this._rulerMarkerMaterial);
+    this._rulerEndMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
+    this._rulerEndMarker.name = RULER_END_MARKER_NAME;
+    this._rulerEndMarker.castShadow = false;
+    this._rulerEndMarker.receiveShadow = false;
+    this._scene.add(this._rulerEndMarker);
+  }
+
+  private _updateRulerEndMarker(point: { x: number; y: number }): void {
+    if (this._rulerEndMarker) {
+      this._rulerEndMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
+    }
+  }
+
+  private _removeRulerMarkers(): void {
+    if (this._rulerStartMarker) {
+      if (this._scene) {
+        this._scene.remove(this._rulerStartMarker);
+      }
+      this._rulerStartMarker.geometry?.dispose();
+      if (Array.isArray(this._rulerStartMarker.material)) {
+        this._rulerStartMarker.material.forEach((m: THREE.Material) => m.dispose());
+      } else {
+        this._rulerStartMarker.material?.dispose();
+      }
+      this._rulerStartMarker = undefined;
+    }
+    if (this._rulerEndMarker) {
+      if (this._scene) {
+        this._scene.remove(this._rulerEndMarker);
+      }
+      this._rulerEndMarker.geometry?.dispose();
+      if (Array.isArray(this._rulerEndMarker.material)) {
+        this._rulerEndMarker.material.forEach((m: THREE.Material) => m.dispose());
+      } else {
+        this._rulerEndMarker.material?.dispose();
+      }
+      this._rulerEndMarker = undefined;
+    }
+    this._rulerMarkerGeometry = undefined;
+    this._rulerMarkerMaterial = undefined;
+  }
+
+  private _updateRulerBadge(start: { x: number; y: number }, end: { x: number; y: number }): void {
+    if (!this._camera) return;
+    const dx: number = end.x - start.x;
+    const dz: number = end.y - start.y;
+    const length: number = Math.hypot(dx, dz);
+    const midX: number = (start.x + end.x) / 2;
+    const midZ: number = (start.y + end.y) / 2;
+    const projection: { x: number; y: number } | null = this._projectToScreen(
+      midX,
+      RULER_BADGE_HEIGHT_OFFSET,
+      midZ
+    );
+    if (!projection) return;
+    this.rulerBadgeLength.set(`${length.toFixed(2)}m`);
+    this.rulerBadgePosition.set(projection);
+  }
+
+  private _hideRulerBadge(): void {
+    this.rulerBadgeLength.set('');
+    this.rulerBadgePosition.set(null);
   }
 
   private _getSnappedFloorPoint(event: PointerEvent): { x: number; y: number } | null {
@@ -507,7 +851,7 @@ export class ViewportComponent implements OnDestroy {
   ): void {
     if (!this._previewGeometry || !this._previewLine) return;
     const positionAttribute: THREE.BufferAttribute = this._previewGeometry.getAttribute(
-      'position'
+      POSITION_ATTRIBUTE_NAME
     ) as THREE.BufferAttribute;
     const array: Float32Array = positionAttribute.array as Float32Array;
     array[0] = start.x;
@@ -616,7 +960,7 @@ export class ViewportComponent implements OnDestroy {
 
   private _disposeWallsGroup(): void {
     this._wallsGroup.traverse((object: THREE.Object3D) => {
-      if (object instanceof THREE.Mesh) {
+      if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
         object.geometry?.dispose();
         if (Array.isArray(object.material)) {
           object.material.forEach((material: THREE.Material) => material.dispose());
@@ -672,7 +1016,7 @@ export class ViewportComponent implements OnDestroy {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = VIEWPORT_ROOM_FLOOR_HEIGHT_OFFSET;
     mesh.receiveShadow = true;
-    mesh.name = 'room-floor';
+    mesh.name = ROOM_FLOOR_MESH_NAME;
     this._floorsGroup.add(mesh);
     this._floorMesh = mesh;
   }
@@ -732,6 +1076,8 @@ export class ViewportComponent implements OnDestroy {
       const canvas: HTMLCanvasElement = this._renderer.domElement;
       canvas.removeEventListener('pointerdown', this._onPointerDown);
       canvas.removeEventListener('pointermove', this._onPointerMove);
+      canvas.removeEventListener('pointerup', this._onPointerUp);
+      canvas.removeEventListener('pointercancel', this._onPointerCancel);
       canvas.removeEventListener('dblclick', this._onDoubleClick);
       window.removeEventListener('keydown', this._onKeyDown);
       if (canvas.parentElement) {
@@ -742,7 +1088,7 @@ export class ViewportComponent implements OnDestroy {
       this._renderer.forceContextLoss();
       const gl: WebGLRenderingContext | null = this._renderer.getContext() as WebGLRenderingContext | null;
       if (gl) {
-        const extension: WEBGL_lose_context | null = gl.getExtension('WEBGL_lose_context');
+        const extension: WEBGL_lose_context | null = gl.getExtension(WEBGL_LOSE_CONTEXT_EXTENSION);
         extension?.loseContext();
       }
       this._renderer = undefined;
@@ -772,6 +1118,8 @@ export class ViewportComponent implements OnDestroy {
     });
     this._floorsGroup.clear();
     this._removeGhostWallMesh();
+    this._removeRulerLine();
+    this._removeRulerMarkers();
     this._previewGeometry?.dispose();
     this._previewMaterial?.dispose();
     this._previewGeometry = undefined;
@@ -785,3 +1133,5 @@ export class ViewportComponent implements OnDestroy {
     this._camera = undefined;
   }
 }
+
+

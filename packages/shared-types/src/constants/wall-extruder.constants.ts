@@ -1,5 +1,4 @@
-export const WALL_COLOR = 0xf5f5f0;
-export const WALL_ROUGHNESS = 0.75;
+export const WALL_ROUGHNESS = 0.85;
 export const WALL_METALNESS = 0.0;
 
 export const TRIM_COLOR = 0xe8e8e0;
@@ -18,4 +17,9 @@ export const WALL_MESH_PREFIX = 'wall';
 export const BASEBOARD_MESH_PREFIX = 'baseboard';
 export const CROWN_MESH_PREFIX = 'crown';
 
-export const WALL_SELECTED_COLOR = 0x4a6cf7;
+export const WALL_SELECTION_OUTLINE_COLOR = 0x7aa2ff;
+export const WALL_SELECTION_EDGE_OPACITY = 0.9;
+export const WALL_SELECTION_EDGE_PREFIX = 'wall-selection-edge';
+
+export const WALL_Z_FIGHT_OFFSET_EPSILON = 0.0005;
+export const WALL_Z_FIGHT_THICKNESS_OFFSET_RATIO = 0.05;

@@ -1,4 +1,4 @@
-export const VIEWPORT_BACKGROUND_COLOR = 0x1a1a2e;
+﻿export const VIEWPORT_BACKGROUND_COLOR = 0x1a1a2e;
 export const VIEWPORT_GRID_SIZE = 20;
 export const VIEWPORT_GRID_DIVISIONS = 40;
 export const VIEWPORT_GRID_COLOR_CENTER_LINE = 0x3d3d5c;
@@ -12,6 +12,9 @@ export const VIEWPORT_CAMERA_LOOK_AT = { x: 0, y: 0, z: 0 } as const;
 
 export const VIEWPORT_AMBIENT_LIGHT_COLOR = 0xffffff;
 export const VIEWPORT_AMBIENT_LIGHT_INTENSITY = 0.5;
+export const VIEWPORT_HEMISPHERE_LIGHT_SKY_COLOR = 0xffffff;
+export const VIEWPORT_HEMISPHERE_LIGHT_GROUND_COLOR = 0x444444;
+export const VIEWPORT_HEMISPHERE_LIGHT_INTENSITY = 1.2;
 export const VIEWPORT_DIRECTIONAL_LIGHT_COLOR = 0xffffff;
 export const VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY = 1.2;
 export const VIEWPORT_DIRECTIONAL_LIGHT_POSITION = { x: 5, y: 10, z: 7 } as const;
@@ -38,9 +41,18 @@ export const VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET = 0.02;
 export const VIEWPORT_GHOST_WALL_COLOR = 0x818cf8;
 export const VIEWPORT_GHOST_WALL_OPACITY = 0.4;
 
+export const RULER_LINE_COLOR = 0xfbbf24;
+export const RULER_LINE_OPACITY = 0.9;
+export const RULER_LINE_DASH_SIZE = 0.2;
+export const RULER_LINE_GAP_SIZE = 0.15;
+export const RULER_MARKER_COLOR = 0xfbbf24;
+export const RULER_MARKER_SIZE = 0.15;
+export const RULER_MARKER_HEIGHT = 0.3;
+export const RULER_BADGE_HEIGHT_OFFSET = 0.6;
+
 export const VIEWPORT_RENDERER_POWER_PREFERENCE: WebGLPowerPreference = 'high-performance';
 export const VIEWPORT_MAX_PIXEL_RATIO = 2;
-export const VIEWPORT_TONE_MAPPING_EXPOSURE = 1.0;
+export const VIEWPORT_TONE_MAPPING_EXPOSURE = 1.7;
 export const VIEWPORT_CONTROLS_DAMPING_FACTOR = 0.05;
 
 export const VIEWPORT_SHADOW_MAP_SIZE = 2048;
@@ -54,3 +66,14 @@ export const ESCAPE_KEY = 'Escape';
 export const DELETE_KEY = 'Delete';
 export const BACKSPACE_KEY = 'Backspace';
 export const PRIMARY_POINTER_BUTTON = 0;
+export const VIEWPORT_CLICK_DRAG_THRESHOLD_PX = 4;
+
+export const VIEWPORT_CONTAINER_SELECTOR = '.viewport-container';
+export const ROOM_FLOORS_GROUP_NAME = 'room-floors';
+export const ROOM_FLOOR_MESH_NAME = 'room-floor';
+export const RULER_LINE_NAME = 'ruler-line';
+export const RULER_START_MARKER_NAME = 'ruler-start-marker';
+export const RULER_END_MARKER_NAME = 'ruler-end-marker';
+export const POSITION_ATTRIBUTE_NAME = 'position';
+export const WALL_USER_DATA_TYPE = 'wall';
+export const WEBGL_LOSE_CONTEXT_EXTENSION = 'WEBGL_lose_context';
