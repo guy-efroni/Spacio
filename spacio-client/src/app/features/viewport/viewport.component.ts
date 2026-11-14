@@ -3,6 +3,7 @@ import {
   ElementRef,
   NgZone,
   OnDestroy,
+  Signal,
   WritableSignal,
   afterNextRender,
   effect,
@@ -101,8 +102,8 @@ export class ViewportComponent implements OnDestroy {
   protected readonly floorplanService: FloorplanService = inject(FloorplanService);
   protected readonly isDrawingMode: WritableSignal<boolean> = signal<boolean>(false);
   protected readonly isRulerMode: WritableSignal<boolean> = signal<boolean>(false);
-  public readonly isDrawingModePublic = this.isDrawingMode.asReadonly();
-  public readonly isRulerModePublic = this.isRulerMode.asReadonly();
+  public readonly isDrawingModePublic: Signal<boolean> = this.isDrawingMode.asReadonly();
+  public readonly isRulerModePublic: Signal<boolean> = this.isRulerMode.asReadonly();
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -237,8 +238,8 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _setToolMode(mode: ViewportToolMode): void {
-    const wasDrawing = this.isDrawingMode();
-    const wasRuler = this.isRulerMode();
+    const wasDrawing: boolean = this.isDrawingMode();
+    const wasRuler: boolean = this.isRulerMode();
 
     this.isDrawingMode.set(mode === ViewportToolMode.DrawWall);
     this.isRulerMode.set(mode === ViewportToolMode.Ruler);
@@ -659,11 +660,11 @@ export class ViewportComponent implements OnDestroy {
   private _updateRulerLine(end: { x: number; y: number }): void {
     if (!this._rulerStartPoint || !this._rulerLineGeometry || !this._rulerLine || !this._rulerLineMaterial) return;
 
-    const start = this._rulerStartPoint;
-    const positionAttribute = this._rulerLineGeometry.getAttribute('position') as THREE.BufferAttribute;
-    const array = positionAttribute.array as Float32Array;
+    const start: { x: number; y: number } = this._rulerStartPoint;
+    const positionAttribute: THREE.BufferAttribute = this._rulerLineGeometry.getAttribute('position') as THREE.BufferAttribute;
+    const array: Float32Array = positionAttribute.array as Float32Array;
 
-    const yPos = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
+    const yPos: number = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
     array[0] = start.x;
     array[1] = yPos;
     array[2] = start.y;
@@ -755,12 +756,12 @@ export class ViewportComponent implements OnDestroy {
 
   private _updateRulerBadge(start: { x: number; y: number }, end: { x: number; y: number }): void {
     if (!this._camera) return;
-    const dx = end.x - start.x;
-    const dz = end.y - start.y;
-    const length = Math.hypot(dx, dz);
-    const midX = (start.x + end.x) / 2;
-    const midZ = (start.y + end.y) / 2;
-    const projection = this._projectToScreen(
+    const dx: number = end.x - start.x;
+    const dz: number = end.y - start.y;
+    const length: number = Math.hypot(dx, dz);
+    const midX: number = (start.x + end.x) / 2;
+    const midZ: number = (start.y + end.y) / 2;
+    const projection: { x: number; y: number } | null = this._projectToScreen(
       midX,
       RULER_BADGE_HEIGHT_OFFSET,
       midZ

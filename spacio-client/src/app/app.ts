@@ -1,4 +1,4 @@
-import { Component, computed, inject, viewChild } from '@angular/core';
+import { Component, computed, inject, Signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FloorplanService } from './core/services/floorplan.service';
 import { PropertyInspectorComponent } from './features/property-inspector/property-inspector.component';
@@ -13,17 +13,17 @@ import { ViewportToolMode } from '@spacio/shared-types';
   styleUrl: './app.scss',
 })
 export class App {
-  private readonly _floorplanService = inject(FloorplanService);
-  protected readonly viewportComponent = viewChild.required<ViewportComponent>('viewportComponent');
+  private readonly _floorplanService: FloorplanService = inject(FloorplanService);
+  protected readonly viewportComponent: Signal<ViewportComponent> = viewChild.required<ViewportComponent>('viewportComponent');
 
-  protected readonly wallCount = computed(() => this._floorplanService.walls().length);
-  protected readonly roomArea = computed(() => this._floorplanService.roomArea());
+  protected readonly wallCount: Signal<number> = computed(() => this._floorplanService.walls().length);
+  protected readonly roomArea: Signal<number> = computed(() => this._floorplanService.roomArea());
 
-  protected readonly ViewportToolMode = ViewportToolMode;
+  protected readonly ViewportToolMode: typeof ViewportToolMode = ViewportToolMode;
 
   protected _onResetRoom(): void {
     this.viewportComponent().onResetRoom();
   }
 
-  protected readonly floorplanService = this._floorplanService;
+  protected readonly floorplanService: FloorplanService = this._floorplanService;
 }
