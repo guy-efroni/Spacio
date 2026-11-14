@@ -1,4 +1,4 @@
-export const VIEWPORT_BACKGROUND_COLOR = 0x1a1a2e;
+﻿export const VIEWPORT_BACKGROUND_COLOR = 0x1a1a2e;
 export const VIEWPORT_GRID_SIZE = 20;
 export const VIEWPORT_GRID_DIVISIONS = 40;
 export const VIEWPORT_GRID_COLOR_CENTER_LINE = 0x3d3d5c;
@@ -67,3 +67,13 @@ export const DELETE_KEY = 'Delete';
 export const BACKSPACE_KEY = 'Backspace';
 export const PRIMARY_POINTER_BUTTON = 0;
 export const VIEWPORT_CLICK_DRAG_THRESHOLD_PX = 4;
+
+export const VIEWPORT_CONTAINER_SELECTOR = '.viewport-container';
+export const ROOM_FLOORS_GROUP_NAME = 'room-floors';
+export const ROOM_FLOOR_MESH_NAME = 'room-floor';
+export const RULER_LINE_NAME = 'ruler-line';
+export const RULER_START_MARKER_NAME = 'ruler-start-marker';
+export const RULER_END_MARKER_NAME = 'ruler-end-marker';
+export const POSITION_ATTRIBUTE_NAME = 'position';
+export const WALL_USER_DATA_TYPE = 'wall';
+export const WEBGL_LOSE_CONTEXT_EXTENSION = 'WEBGL_lose_context';

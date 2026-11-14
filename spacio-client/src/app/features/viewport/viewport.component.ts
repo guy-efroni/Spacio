@@ -1,4 +1,4 @@
-import {
+﻿import {
   Component,
   ElementRef,
   NgZone,
@@ -17,8 +17,17 @@ import {
   DEFAULT_WALL_THICKNESS,
   DEFAULT_WALL_COLOR,
   ESCAPE_KEY,
+  IRulerPoint,
+  IWallMeshUserData,
   IWallSegment,
+  POSITION_ATTRIBUTE_NAME,
   PRIMARY_POINTER_BUTTON,
+  ROOM_FLOOR_MESH_NAME,
+  ROOM_FLOORS_GROUP_NAME,
+  RULER_END_MARKER_NAME,
+  RULER_LINE_NAME,
+  RULER_START_MARKER_NAME,
+  RulerPhase,
   VIEWPORT_AMBIENT_LIGHT_COLOR,
   VIEWPORT_AMBIENT_LIGHT_INTENSITY,
   VIEWPORT_BACKGROUND_COLOR,
@@ -28,6 +37,7 @@ import {
   VIEWPORT_CAMERA_LOOK_AT,
   VIEWPORT_CAMERA_NEAR,
   VIEWPORT_CAMERA_POSITION,
+  VIEWPORT_CONTAINER_SELECTOR,
   VIEWPORT_CONTROLS_DAMPING_FACTOR,
   VIEWPORT_DIRECTIONAL_LIGHT_COLOR,
   VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY,
@@ -70,10 +80,11 @@ import {
   WALL_MESH_PREFIX,
   WALL_PLACEMENT_EPSILON,
   WALL_PREVIEW_NAME,
+  WALL_USER_DATA_TYPE,
+  WEBGL_LOSE_CONTEXT_EXTENSION,
   ViewportToolMode,
   DELETE_KEY,
   BACKSPACE_KEY,
-  IWallMeshUserData,
   RULER_LINE_COLOR,
   RULER_LINE_OPACITY,
   RULER_LINE_DASH_SIZE,
@@ -83,11 +94,11 @@ import {
   RULER_BADGE_HEIGHT_OFFSET,
   RULER_MARKER_HEIGHT,
 } from '@spacio/shared-types';
-import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 import { FloorplanService } from '../../core/services/floorplan.service';
+import { WallExtruder } from '../../shared/utils/wall-extruder.util';
 
-const DEFAULT_INITIAL_WIDTH = typeof window !== 'undefined' ? window.innerWidth : 0;
-const DEFAULT_INITIAL_HEIGHT = typeof window !== 'undefined' ? window.innerHeight : 0;
+const DEFAULT_INITIAL_WIDTH: number = typeof window !== 'undefined' ? window.innerWidth : 0;
+const DEFAULT_INITIAL_HEIGHT: number = typeof window !== 'undefined' ? window.innerHeight : 0;
 
 @Component({
   selector: 'app-viewport',
@@ -125,10 +136,10 @@ export class ViewportComponent implements OnDestroy {
   );
   private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
 
-  private _drawingStartPoint: { x: number; y: number } | null = null;
-  private _pointerDownPosition: { x: number; y: number } | null = null;
+  private _drawingStartPoint: IRulerPoint | null = null;
+  private _pointerDownPosition: IRulerPoint | null = null;
   protected readonly ghostBadgeLength: WritableSignal<string> = signal<string>('');
-  protected readonly ghostBadgePosition: WritableSignal<{ x: number; y: number } | null> = signal<{ x: number; y: number } | null>(null);
+  protected readonly ghostBadgePosition: WritableSignal<IRulerPoint | null> = signal<IRulerPoint | null>(null);
   private _previewLine?: THREE.Line;
   private _previewGeometry?: THREE.BufferGeometry;
   private _previewMaterial?: THREE.LineBasicMaterial;
@@ -137,8 +148,8 @@ export class ViewportComponent implements OnDestroy {
   private _ghostWallMaterial?: THREE.MeshStandardMaterial;
 
   // Ruler state
-  private _rulerStartPoint: { x: number; y: number } | null = null;
-  private _rulerEndPoint: { x: number; y: number } | null = null;
+  private _rulerStartPoint: IRulerPoint | null = null;
+  private _rulerEndPoint: IRulerPoint | null = null;
   private _rulerLine?: THREE.Line;
   private _rulerLineGeometry?: THREE.BufferGeometry;
   private _rulerLineMaterial?: THREE.LineDashedMaterial;
@@ -147,8 +158,8 @@ export class ViewportComponent implements OnDestroy {
   private _rulerMarkerGeometry?: THREE.SphereGeometry;
   private _rulerMarkerMaterial?: THREE.MeshBasicMaterial;
   protected readonly rulerBadgeLength: WritableSignal<string> = signal<string>('');
-  protected readonly rulerBadgePosition: WritableSignal<{ x: number; y: number } | null> = signal<{ x: number; y: number } | null>(null);
-  private _rulerPhase: 'idle' | 'start' | 'measuring' = 'idle';
+  protected readonly rulerBadgePosition: WritableSignal<IRulerPoint | null> = signal<IRulerPoint | null>(null);
+  private _rulerPhase: RulerPhase = RulerPhase.Idle;
 
   private readonly _onPointerDown: (event: PointerEvent) => void = (
     event: PointerEvent
@@ -171,7 +182,7 @@ export class ViewportComponent implements OnDestroy {
 
   public constructor() {
     this._wallsGroup.name = WALLS_ROOT_GROUP_NAME;
-    this._floorsGroup.name = 'room-floors';
+    this._floorsGroup.name = ROOM_FLOORS_GROUP_NAME;
     effect(() => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
       const selectedWallId: string | null = this.floorplanService.selectedWallId();
@@ -267,7 +278,7 @@ export class ViewportComponent implements OnDestroy {
   private _cancelRulerInternal(): void {
     this._rulerStartPoint = null;
     this._rulerEndPoint = null;
-    this._rulerPhase = 'idle';
+    this._rulerPhase = RulerPhase.Idle;
     this._removeRulerLine();
     this._removeRulerMarkers();
     this._hideRulerBadge();
@@ -275,7 +286,7 @@ export class ViewportComponent implements OnDestroy {
 
   private _initializeThreeJS(): void {
     const hostElement: HTMLElement = this._elementRef.nativeElement;
-    const container: HTMLElement = hostElement.querySelector('.viewport-container')!;
+    const container: HTMLElement = hostElement.querySelector(VIEWPORT_CONTAINER_SELECTOR)!;
 
     this._renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -406,7 +417,7 @@ export class ViewportComponent implements OnDestroy {
     if (!this._scene) return;
     this._previewGeometry = new THREE.BufferGeometry();
     this._previewGeometry.setAttribute(
-      'position',
+      POSITION_ATTRIBUTE_NAME,
       new THREE.BufferAttribute(new Float32Array(6), 3)
     );
     this._previewMaterial = new THREE.LineBasicMaterial({
@@ -531,7 +542,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _isWallMeshUserData(userData: Record<string, unknown>): userData is IWallMeshUserData {
-    return userData['type'] === 'wall' && typeof userData['id'] === 'string';
+    return userData['type'] === WALL_USER_DATA_TYPE && typeof userData['id'] === 'string';
   }
 
   private _handlePointerMove(event: PointerEvent): void {
@@ -541,7 +552,7 @@ export class ViewportComponent implements OnDestroy {
       this._updatePreviewLine(this._drawingStartPoint, point);
       this._updateGhostWallMesh(this._drawingStartPoint, point);
       this._updateGhostBadge(this._drawingStartPoint, point);
-    } else if (this.isRulerMode() && this._rulerPhase !== 'idle') {
+    } else if (this.isRulerMode() && this._rulerPhase !== RulerPhase.Idle) {
       const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
       if (!point) return;
       this._updateRulerPreview(point);
@@ -606,18 +617,18 @@ export class ViewportComponent implements OnDestroy {
     const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
     if (!point) return;
 
-    if (this._rulerPhase === 'idle' || this._rulerPhase === 'start') {
+    if (this._rulerPhase === RulerPhase.Idle || this._rulerPhase === RulerPhase.Start) {
       // First click - set start point
       this._rulerStartPoint = point;
-      this._rulerPhase = 'measuring';
+      this._rulerPhase = RulerPhase.Measuring;
       this._createRulerLine(point, point);
       this._createRulerMarkers(point);
-    } else if (this._rulerPhase === 'measuring') {
+    } else if (this._rulerPhase === RulerPhase.Measuring) {
       // Second click - lock end point
       this._rulerEndPoint = point;
       this._updateRulerLine(point);
       this._updateRulerEndMarker(point);
-      this._rulerPhase = 'start'; // Ready for new measurement
+      this._rulerPhase = RulerPhase.Start; // Ready for new measurement
     }
   }
 
@@ -636,7 +647,7 @@ export class ViewportComponent implements OnDestroy {
 
     this._rulerLineGeometry = new THREE.BufferGeometry();
     this._rulerLineGeometry.setAttribute(
-      'position',
+      POSITION_ATTRIBUTE_NAME,
       new THREE.BufferAttribute(new Float32Array(6), 3)
     );
 
@@ -651,7 +662,7 @@ export class ViewportComponent implements OnDestroy {
 
     this._rulerLine = new THREE.Line(this._rulerLineGeometry, this._rulerLineMaterial);
     this._rulerLine.computeLineDistances();
-    this._rulerLine.name = 'ruler-line';
+    this._rulerLine.name = RULER_LINE_NAME;
     this._scene.add(this._rulerLine);
 
     this._updateRulerLine(end);
@@ -660,7 +671,7 @@ export class ViewportComponent implements OnDestroy {
   private _updateRulerLine(end: { x: number; y: number }): void {
     if (!this._rulerStartPoint || !this._rulerLineGeometry || !this._rulerLine || !this._rulerLineMaterial) return;
 
-    const start: { x: number; y: number } = this._rulerStartPoint;
+    const start: IRulerPoint = this._rulerStartPoint;
     const positionAttribute: THREE.BufferAttribute = this._rulerLineGeometry.getAttribute('position') as THREE.BufferAttribute;
     const array: Float32Array = positionAttribute.array as Float32Array;
 
@@ -705,7 +716,7 @@ export class ViewportComponent implements OnDestroy {
     // Start marker
     this._rulerStartMarker = new THREE.Mesh(this._rulerMarkerGeometry, this._rulerMarkerMaterial);
     this._rulerStartMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
-    this._rulerStartMarker.name = 'ruler-start-marker';
+    this._rulerStartMarker.name = RULER_START_MARKER_NAME;
     this._rulerStartMarker.castShadow = false;
     this._rulerStartMarker.receiveShadow = false;
     this._scene.add(this._rulerStartMarker);
@@ -713,7 +724,7 @@ export class ViewportComponent implements OnDestroy {
     // End marker (initially at same position)
     this._rulerEndMarker = new THREE.Mesh(this._rulerMarkerGeometry, this._rulerMarkerMaterial);
     this._rulerEndMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
-    this._rulerEndMarker.name = 'ruler-end-marker';
+    this._rulerEndMarker.name = RULER_END_MARKER_NAME;
     this._rulerEndMarker.castShadow = false;
     this._rulerEndMarker.receiveShadow = false;
     this._scene.add(this._rulerEndMarker);
@@ -840,7 +851,7 @@ export class ViewportComponent implements OnDestroy {
   ): void {
     if (!this._previewGeometry || !this._previewLine) return;
     const positionAttribute: THREE.BufferAttribute = this._previewGeometry.getAttribute(
-      'position'
+      POSITION_ATTRIBUTE_NAME
     ) as THREE.BufferAttribute;
     const array: Float32Array = positionAttribute.array as Float32Array;
     array[0] = start.x;
@@ -1005,7 +1016,7 @@ export class ViewportComponent implements OnDestroy {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = VIEWPORT_ROOM_FLOOR_HEIGHT_OFFSET;
     mesh.receiveShadow = true;
-    mesh.name = 'room-floor';
+    mesh.name = ROOM_FLOOR_MESH_NAME;
     this._floorsGroup.add(mesh);
     this._floorMesh = mesh;
   }
@@ -1077,7 +1088,7 @@ export class ViewportComponent implements OnDestroy {
       this._renderer.forceContextLoss();
       const gl: WebGLRenderingContext | null = this._renderer.getContext() as WebGLRenderingContext | null;
       if (gl) {
-        const extension: WEBGL_lose_context | null = gl.getExtension('WEBGL_lose_context');
+        const extension: WEBGL_lose_context | null = gl.getExtension(WEBGL_LOSE_CONTEXT_EXTENSION);
         extension?.loseContext();
       }
       this._renderer = undefined;
@@ -1122,3 +1133,5 @@ export class ViewportComponent implements OnDestroy {
     this._camera = undefined;
   }
 }
+
+
