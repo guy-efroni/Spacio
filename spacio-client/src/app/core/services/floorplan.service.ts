@@ -3,12 +3,13 @@ import {
   INITIAL_SQUARE_ROOM,
   IWallSegment,
 } from '@spacio/shared-types';
+import { FloorPolygon } from '../types/floor-polygon.type';
 
 const POINT_KEY_PRECISION: number = 3;
 const MIN_LOOP_AREA: number = 1e-6;
 const MAX_HISTORY_DEPTH: number = 50;
-
-type FloorPolygon = { points: readonly { x: number; y: number }[]; area: number } | null;
+const EDGE_KEY_SEPARATOR: string = '->';
+const POINT_KEY_SEPARATOR: string = ',';
 
 @Injectable({ providedIn: 'root' })
 export class FloorplanService {
@@ -26,7 +27,7 @@ export class FloorplanService {
   public readonly canUndo: Signal<boolean> = computed<boolean>(() => this._undoStack().length > 0);
   public readonly canRedo: Signal<boolean> = computed<boolean>(() => this._redoStack().length > 0);
 
-  private readonly _floorPolygon = computed<FloorPolygon>(() => this._computeFloorPolygon(this._walls()));
+  private readonly _floorPolygon: Signal<FloorPolygon> = computed<FloorPolygon>(() => this._computeFloorPolygon(this._walls()));
   public readonly floorPolygon: Signal<readonly { x: number; y: number }[] | null> = computed(
     () => this._floorPolygon()?.points ?? null
   );
@@ -204,7 +205,7 @@ export class FloorplanService {
     const coordByKey: Map<string, { x: number; y: number }> = new Map();
     const unusedEdges: Set<string> = new Set();
 
-    const addPoint = (point: { x: number; y: number }): string => {
+    const addPoint: (point: { x: number; y: number }) => string = (point: { x: number; y: number }): string => {
       const key: string = this._pointKey(point);
       if (!coordByKey.has(key)) {
         coordByKey.set(key, point);
@@ -220,8 +221,8 @@ export class FloorplanService {
       const b: string = addPoint(wall.end);
       adjacency.get(a)!.push(b);
       adjacency.get(b)!.push(a);
-      unusedEdges.add(`${a}->${b}`);
-      unusedEdges.add(`${b}->${a}`);
+      unusedEdges.add(`${a}${EDGE_KEY_SEPARATOR}${b}`);
+      unusedEdges.add(`${b}${EDGE_KEY_SEPARATOR}${a}`);
     }
 
     const loops: { x: number; y: number }[][] = [];
@@ -232,11 +233,11 @@ export class FloorplanService {
         continue;
       }
 
-      const [fromKey, toKey]: [string, string] = edge.split('->') as [string, string];
+      const [fromKey, toKey]: [string, string] = edge.split(EDGE_KEY_SEPARATOR) as [string, string];
       const loopKeys: string[] = [fromKey, toKey];
 
       unusedEdges.delete(edge);
-      unusedEdges.delete(`${toKey}->${fromKey}`);
+      unusedEdges.delete(`${toKey}${EDGE_KEY_SEPARATOR}${fromKey}`);
 
       let prevKey: string = fromKey;
       let currKey: string = toKey;
@@ -247,7 +248,7 @@ export class FloorplanService {
         let nextKey: string | null = null;
 
         for (const neighbor of neighbors) {
-          if (neighbor !== prevKey && unusedEdges.has(`${currKey}->${neighbor}`)) {
+          if (neighbor !== prevKey && unusedEdges.has(`${currKey}${EDGE_KEY_SEPARATOR}${neighbor}`)) {
             nextKey = neighbor;
             break;
           }
@@ -257,8 +258,8 @@ export class FloorplanService {
           break;
         }
 
-        unusedEdges.delete(`${currKey}->${nextKey}`);
-        unusedEdges.delete(`${nextKey}->${currKey}`);
+        unusedEdges.delete(`${currKey}${EDGE_KEY_SEPARATOR}${nextKey}`);
+        unusedEdges.delete(`${nextKey}${EDGE_KEY_SEPARATOR}${currKey}`);
         prevKey = currKey;
         currKey = nextKey;
         loopKeys.push(currKey);
@@ -334,6 +335,6 @@ export class FloorplanService {
   }
 
   private _pointKey(point: { x: number; y: number }): string {
-    return `${point.x.toFixed(POINT_KEY_PRECISION)},${point.y.toFixed(POINT_KEY_PRECISION)}`;
+    return `${point.x.toFixed(POINT_KEY_PRECISION)}${POINT_KEY_SEPARATOR}${point.y.toFixed(POINT_KEY_PRECISION)}`;
   }
 }
