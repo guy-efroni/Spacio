@@ -1,16 +1,15 @@
 import { Injectable, computed, Signal, WritableSignal, signal } from '@angular/core';
 import {
-  DEFAULT_WALL_HEIGHT,
-  DEFAULT_WALL_THICKNESS,
-  DEFAULT_WALL_COLOR,
   INITIAL_SQUARE_ROOM,
   IWallSegment,
 } from '@spacio/shared-types';
+import { FloorPolygon } from '../types/floor-polygon.type';
 
 const POINT_KEY_PRECISION: number = 3;
 const MIN_LOOP_AREA: number = 1e-6;
-
-type FloorPolygon = { points: readonly { x: number; y: number }[]; area: number } | null;
+const MAX_HISTORY_DEPTH: number = 50;
+const EDGE_KEY_SEPARATOR: string = '->';
+const POINT_KEY_SEPARATOR: string = ',';
 
 @Injectable({ providedIn: 'root' })
 export class FloorplanService {
@@ -22,17 +21,29 @@ export class FloorplanService {
   private readonly _selectedWallId: WritableSignal<string | null> = signal<string | null>(null);
   public readonly selectedWallId: Signal<string | null> = this._selectedWallId.asReadonly();
 
-  private readonly _floorPolygon = computed<FloorPolygon>(() => this._computeFloorPolygon(this._walls()));
+  private readonly _undoStack: WritableSignal<IWallSegment[][]> = signal<IWallSegment[][]>([]);
+  private readonly _redoStack: WritableSignal<IWallSegment[][]> = signal<IWallSegment[][]>([]);
+
+  public readonly canUndo: Signal<boolean> = computed<boolean>(() => this._undoStack().length > 0);
+  public readonly canRedo: Signal<boolean> = computed<boolean>(() => this._redoStack().length > 0);
+
+  private readonly _floorPolygon: Signal<FloorPolygon> = computed<FloorPolygon>(() => this._computeFloorPolygon(this._walls()));
   public readonly floorPolygon: Signal<readonly { x: number; y: number }[] | null> = computed(
     () => this._floorPolygon()?.points ?? null
   );
   public readonly roomArea: Signal<number> = computed(() => this._floorPolygon()?.area ?? 0);
 
   public addWall(wall: IWallSegment): void {
+    this._recordHistory();
     this._walls.update((walls: IWallSegment[]) => [...walls, wall]);
   }
 
   public removeWall(id: string): void {
+    const exists: boolean = this._walls().some((wall: IWallSegment) => wall.id === id);
+    if (!exists) {
+      return;
+    }
+    this._recordHistory();
     const wasSelected: boolean = this._selectedWallId() === id;
     this._walls.update((walls: IWallSegment[]) => walls.filter((wall: IWallSegment) => wall.id !== id));
     if (wasSelected) {
@@ -42,11 +53,15 @@ export class FloorplanService {
 
   public removeLastWall(): void {
     const walls: IWallSegment[] = this._walls();
+    if (walls.length === 0) {
+      return;
+    }
+    this._recordHistory();
     const removedWall: IWallSegment | undefined = walls[walls.length - 1];
     if (removedWall && this._selectedWallId() === removedWall.id) {
       this._selectedWallId.set(null);
     }
-    this._walls.update((walls: IWallSegment[]) => walls.slice(0, -1));
+    this._walls.update((current: IWallSegment[]) => current.slice(0, -1));
   }
 
   public selectWall(id: string | null): void {
@@ -57,6 +72,18 @@ export class FloorplanService {
     id: string,
     updates: Partial<Pick<IWallSegment, 'height' | 'thickness' | 'color'>>
   ): void {
+    const target: IWallSegment | undefined = this._walls().find((wall: IWallSegment) => wall.id === id);
+    if (!target) {
+      return;
+    }
+    const hasChange: boolean = Object.entries(updates).some(
+      ([key, value]: [string, number | string | undefined]) =>
+        value !== undefined && target[key as keyof IWallSegment] !== value
+    );
+    if (!hasChange) {
+      return;
+    }
+    this._recordHistory();
     this._walls.update((walls: IWallSegment[]) =>
       walls.map((wall: IWallSegment) =>
         wall.id === id ? { ...wall, ...updates } : wall
@@ -65,13 +92,74 @@ export class FloorplanService {
   }
 
   public resetToDefaultRoom(): void {
+    this._recordHistory();
     this._walls.set(this._createDefaultRoom());
     this._selectedWallId.set(null);
   }
 
   public clearAllWalls(): void {
+    if (this._walls().length === 0) {
+      return;
+    }
+    this._recordHistory();
     this._walls.set([]);
     this._selectedWallId.set(null);
+  }
+
+  public undo(): void {
+    const undoStack: IWallSegment[][] = this._undoStack();
+    if (undoStack.length === 0) {
+      return;
+    }
+    const previousState: IWallSegment[] = undoStack[undoStack.length - 1];
+    const nextUndoStack: IWallSegment[][] = undoStack.slice(0, -1);
+    this._undoStack.set(nextUndoStack);
+    this._redoStack.update((stack: IWallSegment[][]) => [...stack, this._cloneWalls(this._walls())]);
+    this._walls.set(this._cloneWalls(previousState));
+    this._revalidateSelectedWall();
+  }
+
+  public redo(): void {
+    const redoStack: IWallSegment[][] = this._redoStack();
+    if (redoStack.length === 0) {
+      return;
+    }
+    const nextState: IWallSegment[] = redoStack[redoStack.length - 1];
+    const nextRedoStack: IWallSegment[][] = redoStack.slice(0, -1);
+    this._redoStack.set(nextRedoStack);
+    this._undoStack.update((stack: IWallSegment[][]) => [...stack, this._cloneWalls(this._walls())]);
+    this._walls.set(this._cloneWalls(nextState));
+    this._revalidateSelectedWall();
+  }
+
+  private _recordHistory(): void {
+    this._undoStack.update((stack: IWallSegment[][]) => {
+      const next: IWallSegment[][] = [...stack, this._cloneWalls(this._walls())];
+      if (next.length > MAX_HISTORY_DEPTH) {
+        return next.slice(next.length - MAX_HISTORY_DEPTH);
+      }
+      return next;
+    });
+    this._redoStack.set([]);
+  }
+
+  private _revalidateSelectedWall(): void {
+    const selectedId: string | null = this._selectedWallId();
+    if (selectedId === null) {
+      return;
+    }
+    const exists: boolean = this._walls().some((wall: IWallSegment) => wall.id === selectedId);
+    if (!exists) {
+      this._selectedWallId.set(null);
+    }
+  }
+
+  private _cloneWalls(walls: readonly IWallSegment[]): IWallSegment[] {
+    return walls.map((wall: IWallSegment) => ({
+      ...wall,
+      start: { ...wall.start },
+      end: { ...wall.end },
+    }));
   }
 
   private _createDefaultRoom(): IWallSegment[] {
@@ -117,7 +205,7 @@ export class FloorplanService {
     const coordByKey: Map<string, { x: number; y: number }> = new Map();
     const unusedEdges: Set<string> = new Set();
 
-    const addPoint = (point: { x: number; y: number }): string => {
+    const addPoint: (point: { x: number; y: number }) => string = (point: { x: number; y: number }): string => {
       const key: string = this._pointKey(point);
       if (!coordByKey.has(key)) {
         coordByKey.set(key, point);
@@ -133,8 +221,8 @@ export class FloorplanService {
       const b: string = addPoint(wall.end);
       adjacency.get(a)!.push(b);
       adjacency.get(b)!.push(a);
-      unusedEdges.add(`${a}->${b}`);
-      unusedEdges.add(`${b}->${a}`);
+      unusedEdges.add(`${a}${EDGE_KEY_SEPARATOR}${b}`);
+      unusedEdges.add(`${b}${EDGE_KEY_SEPARATOR}${a}`);
     }
 
     const loops: { x: number; y: number }[][] = [];
@@ -145,11 +233,11 @@ export class FloorplanService {
         continue;
       }
 
-      const [fromKey, toKey]: [string, string] = edge.split('->') as [string, string];
+      const [fromKey, toKey]: [string, string] = edge.split(EDGE_KEY_SEPARATOR) as [string, string];
       const loopKeys: string[] = [fromKey, toKey];
 
       unusedEdges.delete(edge);
-      unusedEdges.delete(`${toKey}->${fromKey}`);
+      unusedEdges.delete(`${toKey}${EDGE_KEY_SEPARATOR}${fromKey}`);
 
       let prevKey: string = fromKey;
       let currKey: string = toKey;
@@ -160,7 +248,7 @@ export class FloorplanService {
         let nextKey: string | null = null;
 
         for (const neighbor of neighbors) {
-          if (neighbor !== prevKey && unusedEdges.has(`${currKey}->${neighbor}`)) {
+          if (neighbor !== prevKey && unusedEdges.has(`${currKey}${EDGE_KEY_SEPARATOR}${neighbor}`)) {
             nextKey = neighbor;
             break;
           }
@@ -170,8 +258,8 @@ export class FloorplanService {
           break;
         }
 
-        unusedEdges.delete(`${currKey}->${nextKey}`);
-        unusedEdges.delete(`${nextKey}->${currKey}`);
+        unusedEdges.delete(`${currKey}${EDGE_KEY_SEPARATOR}${nextKey}`);
+        unusedEdges.delete(`${nextKey}${EDGE_KEY_SEPARATOR}${currKey}`);
         prevKey = currKey;
         currKey = nextKey;
         loopKeys.push(currKey);
@@ -247,6 +335,6 @@ export class FloorplanService {
   }
 
   private _pointKey(point: { x: number; y: number }): string {
-    return `${point.x.toFixed(POINT_KEY_PRECISION)},${point.y.toFixed(POINT_KEY_PRECISION)}`;
+    return `${point.x.toFixed(POINT_KEY_PRECISION)}${POINT_KEY_SEPARATOR}${point.y.toFixed(POINT_KEY_PRECISION)}`;
   }
 }
