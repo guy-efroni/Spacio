@@ -1,0 +1,96 @@
+import {
+  Component,
+  computed,
+  inject,
+  OnDestroy,
+  Signal,
+  viewChild,
+} from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { FloorplanService } from '../../core/services/floorplan.service';
+import { PropertyInspectorComponent } from '../property-inspector/property-inspector.component';
+import { ViewportComponent } from '../viewport/viewport.component';
+import {
+  ViewportToolMode,
+  HtmlTag,
+  KeyboardKey,
+  StudioViewChild,
+} from '@spacio/shared-types';
+
+@Component({
+  selector: 'app-studio',
+  standalone: true,
+  imports: [DecimalPipe, PropertyInspectorComponent, ViewportComponent],
+  providers: [FloorplanService],
+  templateUrl: './studio.component.html',
+  styleUrl: './studio.component.scss',
+})
+export class StudioComponent implements OnDestroy {
+  private readonly _floorplanService: FloorplanService = inject(FloorplanService);
+  protected readonly viewportComponent: Signal<ViewportComponent> =
+    viewChild.required<ViewportComponent>(StudioViewChild.ViewportComponent);
+
+  protected readonly wallCount: Signal<number> = computed<number>(
+    () => this._floorplanService.walls().length
+  );
+  protected readonly roomArea: Signal<number> = computed<number>(() =>
+    this._floorplanService.roomArea()
+  );
+
+  protected readonly ViewportToolMode: typeof ViewportToolMode = ViewportToolMode;
+  private readonly _onKeyDown: (event: KeyboardEvent) => void = (
+    event: KeyboardEvent
+  ): void => this._handleKeyDown(event);
+
+  public constructor() {
+    window.addEventListener('keydown', this._onKeyDown);
+  }
+
+  public ngOnDestroy(): void {
+    window.removeEventListener('keydown', this._onKeyDown);
+  }
+
+  protected _onResetRoom(): void {
+    this.viewportComponent().onResetRoom();
+  }
+
+  protected readonly floorplanService: FloorplanService =
+    this._floorplanService;
+
+  private _handleKeyDown(event: KeyboardEvent): void {
+    if (this._isEditableTarget(event.target)) {
+      return;
+    }
+
+    const key: string = event.key.toLowerCase();
+    const isUndo: boolean =
+      event.ctrlKey && !event.shiftKey && key === KeyboardKey.Undo;
+    const isRedo: boolean =
+      event.ctrlKey &&
+      (key === KeyboardKey.Redo || (event.shiftKey && key === KeyboardKey.Undo));
+
+    if (isUndo) {
+      event.preventDefault();
+      this._floorplanService.undo();
+      return;
+    }
+
+    if (isRedo) {
+      event.preventDefault();
+      this._floorplanService.redo();
+    }
+  }
+
+  private _isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    const tagName: string = target.tagName;
+    return (
+      tagName === HtmlTag.Input ||
+      tagName === HtmlTag.TextArea ||
+      tagName === HtmlTag.Select ||
+      target.isContentEditable
+    );
+  }
+}
