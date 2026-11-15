@@ -1,15 +1,40 @@
 import { Injectable, computed, Signal, WritableSignal, signal } from '@angular/core';
 import {
+  DEFAULT_DOOR_ELEVATION,
+  DEFAULT_DOOR_HEIGHT,
+  DEFAULT_DOOR_WIDTH,
+  DEFAULT_WINDOW_ELEVATION,
+  DEFAULT_WINDOW_HEIGHT,
+  DEFAULT_WINDOW_WIDTH,
   INITIAL_SQUARE_ROOM,
+  IWallOpening,
   IWallSegment,
+  MAX_OPENING_WIDTH,
+  MIN_OPENING_WIDTH,
+  WallOpeningType,
 } from '@spacio/shared-types';
+import {
+  OpeningGap,
+  OpeningHorizontalPlacement,
+  OpeningVerticalPlacement,
+  getOpeningFreeGaps,
+  getWallLength,
+  resolveOpeningPlacement,
+  resolveOpeningVertical,
+} from '../../shared/utils/opening.util';
 import { FloorPolygon } from '../types/floor-polygon.type';
 
 const POINT_KEY_PRECISION: number = 3;
 const MIN_LOOP_AREA: number = 1e-6;
+const OPENING_EPSILON: number = 1e-6;
 const MAX_HISTORY_DEPTH: number = 50;
 const EDGE_KEY_SEPARATOR: string = '->';
 const POINT_KEY_SEPARATOR: string = ',';
+
+type IFloorplanSnapshot = {
+  walls: IWallSegment[];
+  openings: IWallOpening[];
+};
 
 @Injectable({ providedIn: 'root' })
 export class FloorplanService {
@@ -18,11 +43,17 @@ export class FloorplanService {
   );
   public readonly walls: Signal<readonly IWallSegment[]> = this._walls.asReadonly();
 
+  private readonly _openings: WritableSignal<IWallOpening[]> = signal<IWallOpening[]>([]);
+  public readonly openings: Signal<readonly IWallOpening[]> = this._openings.asReadonly();
+
   private readonly _selectedWallId: WritableSignal<string | null> = signal<string | null>(null);
   public readonly selectedWallId: Signal<string | null> = this._selectedWallId.asReadonly();
 
-  private readonly _undoStack: WritableSignal<IWallSegment[][]> = signal<IWallSegment[][]>([]);
-  private readonly _redoStack: WritableSignal<IWallSegment[][]> = signal<IWallSegment[][]>([]);
+  private readonly _selectedOpeningId: WritableSignal<string | null> = signal<string | null>(null);
+  public readonly selectedOpeningId: Signal<string | null> = this._selectedOpeningId.asReadonly();
+
+  private readonly _undoStack: WritableSignal<IFloorplanSnapshot[]> = signal<IFloorplanSnapshot[]>([]);
+  private readonly _redoStack: WritableSignal<IFloorplanSnapshot[]> = signal<IFloorplanSnapshot[]>([]);
 
   public readonly canUndo: Signal<boolean> = computed<boolean>(() => this._undoStack().length > 0);
   public readonly canRedo: Signal<boolean> = computed<boolean>(() => this._redoStack().length > 0);
@@ -46,9 +77,11 @@ export class FloorplanService {
     this._recordHistory();
     const wasSelected: boolean = this._selectedWallId() === id;
     this._walls.update((walls: IWallSegment[]) => walls.filter((wall: IWallSegment) => wall.id !== id));
+    this._openings.update((openings: IWallOpening[]) => openings.filter((opening: IWallOpening) => opening.wallId !== id));
     if (wasSelected) {
       this._selectedWallId.set(null);
     }
+    this._revalidateSelectedOpening();
   }
 
   public removeLastWall(): void {
@@ -62,10 +95,122 @@ export class FloorplanService {
       this._selectedWallId.set(null);
     }
     this._walls.update((current: IWallSegment[]) => current.slice(0, -1));
+    if (removedWall) {
+      this._openings.update((openings: IWallOpening[]) =>
+        openings.filter((opening: IWallOpening) => opening.wallId !== removedWall.id)
+      );
+      this._revalidateSelectedOpening();
+    }
   }
 
   public selectWall(id: string | null): void {
     this._selectedWallId.set(id);
+  }
+
+  public selectOpening(id: string | null): void {
+    this._selectedOpeningId.set(id);
+  }
+
+  public addOpeningToWall(wallId: string, type: WallOpeningType): boolean {
+    const wall: IWallSegment | undefined = this._walls().find((item: IWallSegment) => item.id === wallId);
+    if (!wall) {
+      return false;
+    }
+
+    const wallLength: number = getWallLength(wall);
+    const wallOpenings: IWallOpening[] = this._openings().filter(
+      (opening: IWallOpening) => opening.wallId === wallId
+    );
+    const gaps: OpeningGap[] = getOpeningFreeGaps(wallLength, wallOpenings);
+    const usableGaps: OpeningGap[] = gaps.filter(
+      (gap: OpeningGap) => gap.end - gap.start + OPENING_EPSILON >= MIN_OPENING_WIDTH
+    );
+    if (usableGaps.length === 0) {
+      return false;
+    }
+
+    const largestGap: OpeningGap = usableGaps.reduce((best: OpeningGap, gap: OpeningGap) =>
+      gap.end - gap.start > best.end - best.start ? gap : best
+    );
+    const defaultOpening: IWallOpening = this._createDefaultOpening(wallId, type);
+    const width: number = Math.min(
+      defaultOpening.width,
+      MAX_OPENING_WIDTH,
+      largestGap.end - largestGap.start
+    );
+    if (width + OPENING_EPSILON < MIN_OPENING_WIDTH) {
+      return false;
+    }
+
+    const vertical: OpeningVerticalPlacement = resolveOpeningVertical(defaultOpening, wall.height);
+    const opening: IWallOpening = {
+      ...defaultOpening,
+      positionAlongWall: largestGap.start + (largestGap.end - largestGap.start - width) / 2,
+      width,
+      ...vertical,
+    };
+
+    this._recordHistory();
+    this._openings.update((openings: IWallOpening[]) => [...openings, opening]);
+    this._selectedOpeningId.set(opening.id);
+    return true;
+  }
+
+  public removeOpening(id: string): void {
+    const exists: boolean = this._openings().some((opening: IWallOpening) => opening.id === id);
+    if (!exists) {
+      return;
+    }
+    this._recordHistory();
+    this._openings.update((openings: IWallOpening[]) => openings.filter((opening: IWallOpening) => opening.id !== id));
+    if (this._selectedOpeningId() === id) {
+      this._selectedOpeningId.set(null);
+    }
+  }
+
+  public updateOpening(
+    id: string,
+    updates: Partial<Omit<IWallOpening, 'id' | 'wallId' | 'type'>>
+  ): boolean {
+    const target: IWallOpening | undefined = this._openings().find((opening: IWallOpening) => opening.id === id);
+    if (!target) {
+      return false;
+    }
+
+    const wall: IWallSegment | undefined = this._walls().find(
+      (item: IWallSegment) => item.id === target.wallId
+    );
+    if (!wall) {
+      return false;
+    }
+
+    const otherOpenings: IWallOpening[] = this._openings().filter(
+      (opening: IWallOpening) => opening.wallId === target.wallId && opening.id !== target.id
+    );
+    const candidate: IWallOpening = { ...target, ...updates };
+    const horizontal: OpeningHorizontalPlacement | null = resolveOpeningPlacement(
+      candidate,
+      otherOpenings,
+      getWallLength(wall)
+    );
+    if (!horizontal) {
+      return false;
+    }
+
+    const vertical: OpeningVerticalPlacement = resolveOpeningVertical(candidate, wall.height);
+    const next: IWallOpening = { ...candidate, ...horizontal, ...vertical };
+    const hasChange: boolean = (
+      Object.keys(next) as Array<keyof IWallOpening>
+    ).some((key: keyof IWallOpening) => next[key] !== target[key]);
+    if (!hasChange) {
+      return false;
+    }
+
+    this._recordHistory();
+    this._openings.update((openings: IWallOpening[]) =>
+      openings.map((opening: IWallOpening) => (opening.id === id ? next : opening))
+    );
+    return true;
   }
 
   public updateWallProperties(
@@ -94,53 +239,69 @@ export class FloorplanService {
   public resetToDefaultRoom(): void {
     this._recordHistory();
     this._walls.set(this._createDefaultRoom());
+    this._openings.set([]);
     this._selectedWallId.set(null);
+    this._selectedOpeningId.set(null);
   }
 
   public clearAllWalls(): void {
-    if (this._walls().length === 0) {
+    if (this._walls().length === 0 && this._openings().length === 0) {
       return;
     }
     this._recordHistory();
     this._walls.set([]);
+    this._openings.set([]);
     this._selectedWallId.set(null);
+    this._selectedOpeningId.set(null);
   }
 
   public undo(): void {
-    const undoStack: IWallSegment[][] = this._undoStack();
+    const undoStack: IFloorplanSnapshot[] = this._undoStack();
     if (undoStack.length === 0) {
       return;
     }
-    const previousState: IWallSegment[] = undoStack[undoStack.length - 1];
-    const nextUndoStack: IWallSegment[][] = undoStack.slice(0, -1);
+    const previousState: IFloorplanSnapshot = undoStack[undoStack.length - 1];
+    const nextUndoStack: IFloorplanSnapshot[] = undoStack.slice(0, -1);
     this._undoStack.set(nextUndoStack);
-    this._redoStack.update((stack: IWallSegment[][]) => [...stack, this._cloneWalls(this._walls())]);
-    this._walls.set(this._cloneWalls(previousState));
-    this._revalidateSelectedWall();
+    this._redoStack.update((stack: IFloorplanSnapshot[]) => [...stack, this._snapshot()]);
+    this._restoreSnapshot(previousState);
   }
 
   public redo(): void {
-    const redoStack: IWallSegment[][] = this._redoStack();
+    const redoStack: IFloorplanSnapshot[] = this._redoStack();
     if (redoStack.length === 0) {
       return;
     }
-    const nextState: IWallSegment[] = redoStack[redoStack.length - 1];
-    const nextRedoStack: IWallSegment[][] = redoStack.slice(0, -1);
+    const nextState: IFloorplanSnapshot = redoStack[redoStack.length - 1];
+    const nextRedoStack: IFloorplanSnapshot[] = redoStack.slice(0, -1);
     this._redoStack.set(nextRedoStack);
-    this._undoStack.update((stack: IWallSegment[][]) => [...stack, this._cloneWalls(this._walls())]);
-    this._walls.set(this._cloneWalls(nextState));
-    this._revalidateSelectedWall();
+    this._undoStack.update((stack: IFloorplanSnapshot[]) => [...stack, this._snapshot()]);
+    this._restoreSnapshot(nextState);
   }
 
   private _recordHistory(): void {
-    this._undoStack.update((stack: IWallSegment[][]) => {
-      const next: IWallSegment[][] = [...stack, this._cloneWalls(this._walls())];
+    this._undoStack.update((stack: IFloorplanSnapshot[]) => {
+      const next: IFloorplanSnapshot[] = [...stack, this._snapshot()];
       if (next.length > MAX_HISTORY_DEPTH) {
         return next.slice(next.length - MAX_HISTORY_DEPTH);
       }
       return next;
     });
     this._redoStack.set([]);
+  }
+
+  private _snapshot(): IFloorplanSnapshot {
+    return {
+      walls: this._cloneWalls(this._walls()),
+      openings: this._cloneOpenings(this._openings()),
+    };
+  }
+
+  private _restoreSnapshot(snapshot: IFloorplanSnapshot): void {
+    this._walls.set(this._cloneWalls(snapshot.walls));
+    this._openings.set(this._cloneOpenings(snapshot.openings));
+    this._revalidateSelectedWall();
+    this._revalidateSelectedOpening();
   }
 
   private _revalidateSelectedWall(): void {
@@ -154,12 +315,54 @@ export class FloorplanService {
     }
   }
 
+  private _revalidateSelectedOpening(): void {
+    const selectedId: string | null = this._selectedOpeningId();
+    if (selectedId === null) {
+      return;
+    }
+    const exists: boolean = this._openings().some((opening: IWallOpening) => opening.id === selectedId);
+    if (!exists) {
+      this._selectedOpeningId.set(null);
+    }
+  }
+
   private _cloneWalls(walls: readonly IWallSegment[]): IWallSegment[] {
     return walls.map((wall: IWallSegment) => ({
       ...wall,
       start: { ...wall.start },
       end: { ...wall.end },
     }));
+  }
+
+  private _cloneOpenings(openings: readonly IWallOpening[]): IWallOpening[] {
+    return openings.map((opening: IWallOpening) => ({ ...opening }));
+  }
+
+  private _createDefaultOpening(wallId: string, type: WallOpeningType): IWallOpening {
+    if (type === WallOpeningType.Door) {
+      return {
+        id: this._generateOpeningId(),
+        wallId,
+        type,
+        positionAlongWall: 0.5,
+        width: DEFAULT_DOOR_WIDTH,
+        height: DEFAULT_DOOR_HEIGHT,
+        elevation: DEFAULT_DOOR_ELEVATION,
+      };
+    }
+    return {
+      id: this._generateOpeningId(),
+      wallId,
+      type,
+      positionAlongWall: 0.5,
+      width: DEFAULT_WINDOW_WIDTH,
+      height: DEFAULT_WINDOW_HEIGHT,
+      elevation: DEFAULT_WINDOW_ELEVATION,
+    };
+  }
+
+  private _generateOpeningId(): string {
+    return `opening-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   }
 
   private _createDefaultRoom(): IWallSegment[] {
