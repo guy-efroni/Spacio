@@ -10,7 +10,12 @@ import { DecimalPipe } from '@angular/common';
 import { FloorplanService } from '../../core/services/floorplan.service';
 import { PropertyInspectorComponent } from '../property-inspector/property-inspector.component';
 import { ViewportComponent } from '../viewport/viewport.component';
-import { ViewportToolMode } from '@spacio/shared-types';
+import {
+  ViewportToolMode,
+  HtmlTag,
+  KeyboardKey,
+  StudioViewChild,
+} from '@spacio/shared-types';
 
 @Component({
   selector: 'app-studio',
@@ -23,7 +28,7 @@ import { ViewportToolMode } from '@spacio/shared-types';
 export class StudioComponent implements OnDestroy {
   private readonly _floorplanService: FloorplanService = inject(FloorplanService);
   protected readonly viewportComponent: Signal<ViewportComponent> =
-    viewChild.required<ViewportComponent>('viewportComponent');
+    viewChild.required<ViewportComponent>(StudioViewChild.ViewportComponent);
 
   protected readonly wallCount: Signal<number> = computed<number>(
     () => this._floorplanService.walls().length
@@ -58,9 +63,11 @@ export class StudioComponent implements OnDestroy {
     }
 
     const key: string = event.key.toLowerCase();
-    const isUndo: boolean = event.ctrlKey && !event.shiftKey && key === 'z';
+    const isUndo: boolean =
+      event.ctrlKey && !event.shiftKey && key === KeyboardKey.Undo;
     const isRedo: boolean =
-      event.ctrlKey && (key === 'y' || (event.shiftKey && key === 'z'));
+      event.ctrlKey &&
+      (key === KeyboardKey.Redo || (event.shiftKey && key === KeyboardKey.Undo));
 
     if (isUndo) {
       event.preventDefault();
@@ -80,9 +87,9 @@ export class StudioComponent implements OnDestroy {
     }
     const tagName: string = target.tagName;
     return (
-      tagName === 'INPUT' ||
-      tagName === 'TEXTAREA' ||
-      tagName === 'SELECT' ||
+      tagName === HtmlTag.Input ||
+      tagName === HtmlTag.TextArea ||
+      tagName === HtmlTag.Select ||
       target.isContentEditable
     );
   }

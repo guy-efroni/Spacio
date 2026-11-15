@@ -11,3 +11,6 @@ export * from './constants/wall.constants';
 export * from './constants/wall-extruder.constants';
 export * from './enums/viewport-tool-mode.enum';
 export * from './enums/ruler-phase.enum';
+export * from './enums/html-tag.enum';
+export * from './enums/keyboard-key.enum';
+export * from './enums/studio-view-child.enum';
