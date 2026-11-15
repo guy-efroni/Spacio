@@ -128,6 +128,58 @@
       </div>
     </div>
 
+    <!-- Divider before openings -->
+    <div class="inspector-panel__divider"></div>
+
+    <!-- Openings -->
+    <div class="inspector-panel__section inspector-panel__section--openings">
+      <div class="inspector-panel__section-header">
+        <label class="inspector-panel__control-label">Openings</label>
+        <div class="inspector-panel__opening-actions">
+          <button type="button" class="inspector-panel__mini-button" (click)="onAddDoor()">+ Add Door</button>
+          <button type="button" class="inspector-panel__mini-button" (click)="onAddWindow()">+ Add Window</button>
+        </div>
+      </div>
+
+      @if (wallOpenings().length === 0) {
+        <p class="inspector-panel__empty">No doors or windows on this wall.</p>
+      } @else {
+        <div class="inspector-panel__openings-list">
+          @for (opening of wallOpenings(); track trackOpeningById($index, opening)) {
+            <div class="inspector-panel__opening-card">
+              <div class="inspector-panel__opening-header">
+                <span class="inspector-panel__opening-type">{{ opening.type === 'door' ? 'Door' : 'Window' }}</span>
+                <button type="button" class="inspector-panel__icon-button" (click)="onRemoveOpening(opening.id)" title="Remove opening" aria-label="Remove opening">×</button>
+              </div>
+
+              <label class="inspector-panel__field">
+                <span class="inspector-panel__field-label">Position (m)</span>
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.positionAlongWall" [min]="openingMinPosition(opening)" [max]="openingMaxPosition(opening)" [step]="openingPositionStep" (input)="onOpeningPositionChange(opening.id, $event.target.valueAsNumber)" />
+                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="opening.positionAlongWall" [min]="openingMinPosition(opening)" [max]="openingMaxPosition(opening)" [step]="openingPositionStep" (input)="onOpeningPositionChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening position slider" />
+              </label>
+
+              <label class="inspector-panel__field">
+                <span class="inspector-panel__field-label">Width (m)</span>
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.width" [min]="minOpeningWidth" [max]="openingMaxWidth(opening)" [step]="openingWidthStep" (input)="onOpeningWidthChange(opening.id, $event.target.valueAsNumber)" />
+                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="opening.width" [min]="minOpeningWidth" [max]="openingMaxWidth(opening)" [step]="openingWidthStep" (input)="onOpeningWidthChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening width slider" />
+              </label>
+
+              <label class="inspector-panel__field">
+                <span class="inspector-panel__field-label">Height (m)</span>
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.height" [min]="minOpeningHeight" [max]="openingMaxHeight(opening)" [step]="openingHeightStep" (input)="onOpeningHeightChange(opening.id, $event.target.valueAsNumber)" />
+              </label>
+
+              <label class="inspector-panel__field">
+                <span class="inspector-panel__field-label">Elevation (m)</span>
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.elevation" [min]="minOpeningElevation" [max]="openingMaxElevation(opening)" [step]="openingElevationStep" (input)="onOpeningElevationChange(opening.id, $event.target.valueAsNumber)" />
+                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="opening.elevation" [min]="minOpeningElevation" [max]="openingMaxElevation(opening)" [step]="openingElevationStep" (input)="onOpeningElevationChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening elevation slider" />
+              </label>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
     <!-- Divider before actions -->
     <div class="inspector-panel__divider"></div>
 

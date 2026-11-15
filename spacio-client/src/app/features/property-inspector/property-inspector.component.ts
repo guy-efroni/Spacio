@@ -11,14 +11,26 @@ import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
 import { FloorplanService } from '../../core/services/floorplan.service';
 import {
+  OpeningPlacementBounds,
+  getOpeningPlacementBounds,
+} from '../../shared/utils/opening.util';
+import {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
+  IWallOpening,
+  IWallSegment,
+  MAX_OPENING_ELEVATION,
+  MAX_OPENING_HEIGHT,
+  MAX_OPENING_WIDTH,
   MAX_WALL_HEIGHT,
-  MIN_WALL_HEIGHT,
   MAX_WALL_THICKNESS,
+  MIN_OPENING_ELEVATION,
+  MIN_OPENING_HEIGHT,
+  MIN_OPENING_WIDTH,
+  MIN_WALL_HEIGHT,
+  MIN_WALL_PIER,
   MIN_WALL_THICKNESS,
   WALL_COLOR_PRESETS,
-  IWallSegment,
 } from '@spacio/shared-types';
 
 type WallColorPreset = { readonly name: string; readonly value: string };
@@ -68,6 +80,29 @@ export class PropertyInspectorComponent {
   public readonly heightStep: number = 0.1;
   public readonly thicknessStep: number = 0.05;
 
+  public readonly wallOpenings: Signal<readonly IWallOpening[]> = computed<readonly IWallOpening[]>(() => {
+    const id: string | null = this._floorplanService.selectedWallId();
+    if (!id) return [];
+    return this._floorplanService
+      .openings()
+      .filter((opening: IWallOpening) => opening.wallId === id)
+      .sort(
+        (a: IWallOpening, b: IWallOpening) =>
+          a.positionAlongWall - b.positionAlongWall
+      );
+  });
+
+  public readonly minOpeningWidth: number = MIN_OPENING_WIDTH;
+  public readonly maxOpeningWidth: number = MAX_OPENING_WIDTH;
+  public readonly minOpeningHeight: number = MIN_OPENING_HEIGHT;
+  public readonly maxOpeningHeight: number = MAX_OPENING_HEIGHT;
+  public readonly minOpeningElevation: number = MIN_OPENING_ELEVATION;
+  public readonly maxOpeningElevation: number = MAX_OPENING_ELEVATION;
+  public readonly openingWidthStep: number = 0.1;
+  public readonly openingHeightStep: number = 0.1;
+  public readonly openingElevationStep: number = 0.05;
+  public readonly openingPositionStep: number = 0.01;
+
   public constructor() {
     // Initialize from selected wall when component is created
     effect((): void => {
@@ -113,5 +148,117 @@ export class PropertyInspectorComponent {
     if (id) {
       this._floorplanService.removeWall(id);
     }
+  }
+
+  public onAddDoor(): void {
+    const id: string | null = this._floorplanService.selectedWallId();
+    if (id) {
+      this._floorplanService.addOpeningToWall(id, 'door');
+    }
+  }
+
+  public onAddWindow(): void {
+    const id: string | null = this._floorplanService.selectedWallId();
+    if (id) {
+      this._floorplanService.addOpeningToWall(id, 'window');
+    }
+  }
+
+  public onRemoveOpening(id: string): void {
+    this._floorplanService.removeOpening(id);
+  }
+
+  public openingBounds(opening: IWallOpening): OpeningPlacementBounds | null {
+    const otherOpenings: IWallOpening[] = this.wallOpenings().filter(
+      (item: IWallOpening) => item.id !== opening.id
+    );
+    return getOpeningPlacementBounds(opening, otherOpenings, this.wallLength());
+  }
+
+  public openingMinPosition(_opening: IWallOpening): number {
+    return MIN_WALL_PIER;
+  }
+
+  public openingMaxPosition(opening: IWallOpening): number {
+    return Math.max(
+      MIN_WALL_PIER,
+      this.wallLength() - MIN_WALL_PIER - opening.width
+    );
+  }
+
+  public openingMaxWidth(opening: IWallOpening): number {
+    return this.openingBounds(opening)?.maxWidth ?? this.maxOpeningWidth;
+  }
+
+  public openingMaxHeight(opening: IWallOpening): number {
+    const wall: IWallSegment | null = this.selectedWall();
+    if (!wall) return this.maxOpeningHeight;
+    return Math.max(
+      this.minOpeningHeight,
+      Math.min(this.maxOpeningHeight, wall.height - opening.elevation)
+    );
+  }
+
+  public openingMaxElevation(opening: IWallOpening): number {
+    const wall: IWallSegment | null = this.selectedWall();
+    if (!wall) return this.maxOpeningElevation;
+    return Math.max(
+      this.minOpeningElevation,
+      Math.min(this.maxOpeningElevation, wall.height - opening.height)
+    );
+  }
+
+  public onOpeningPositionChange(id: string, value: number): void {
+    if (!Number.isFinite(value)) return;
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id
+    );
+    if (!opening) return;
+    this._floorplanService.updateOpening(id, {
+      positionAlongWall: Math.min(
+        this.openingMaxPosition(opening),
+        Math.max(MIN_WALL_PIER, value)
+      ),
+    });
+  }
+
+  public onOpeningWidthChange(id: string, value: number): void {
+    if (!Number.isFinite(value)) return;
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id
+    );
+    if (!opening) return;
+    const bounds: OpeningPlacementBounds | null = this.openingBounds(opening);
+    const minWidth: number = bounds?.minWidth ?? this.minOpeningWidth;
+    const maxWidth: number = bounds?.maxWidth ?? this.maxOpeningWidth;
+    this._floorplanService.updateOpening(id, {
+      width: Math.min(maxWidth, Math.max(minWidth, value)),
+    });
+  }
+
+  public onOpeningHeightChange(id: string, value: number): void {
+    if (!Number.isFinite(value)) return;
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id
+    );
+    if (!opening) return;
+    this._floorplanService.updateOpening(id, {
+      height: Math.min(this.openingMaxHeight(opening), Math.max(this.minOpeningHeight, value)),
+    });
+  }
+
+  public onOpeningElevationChange(id: string, value: number): void {
+    if (!Number.isFinite(value)) return;
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id
+    );
+    if (!opening) return;
+    this._floorplanService.updateOpening(id, {
+      elevation: Math.min(this.openingMaxElevation(opening), Math.max(this.minOpeningElevation, value)),
+    });
+  }
+
+  public trackOpeningById(_index: number, opening: IWallOpening): string {
+    return opening.id;
   }
 }

@@ -451,6 +451,115 @@
   flex-shrink: 0;
 }
 
+/* Openings */
+.inspector-panel__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inspector-panel__opening-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.inspector-panel__mini-button {
+  padding: 4px 8px;
+  border: 1px solid rgba(74, 108, 247, 0.35);
+  border-radius: 8px;
+  background: rgba(74, 108, 247, 0.12);
+  color: #d4d4d8;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.inspector-panel__mini-button:hover {
+  background: rgba(74, 108, 247, 0.22);
+  color: #fff;
+}
+
+.inspector-panel__empty {
+  margin: 0;
+  font-size: 12px;
+  color: #71717a;
+}
+
+.inspector-panel__openings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inspector-panel__opening-card {
+  padding: 10px;
+  border: 1px solid rgba(63, 63, 70, 0.5);
+  border-radius: 10px;
+  background: rgba(28, 28, 34, 0.55);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.inspector-panel__opening-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inspector-panel__opening-type {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.inspector-panel__icon-button {
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.inspector-panel__icon-button:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.inspector-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inspector-panel__field-label {
+  font-size: 11px;
+  color: #a1a1aa;
+}
+
+.inspector-panel__input--compact {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.inspector-panel__slider--opening {
+  margin-top: 4px;
+
+  &::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+  }
+
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 /* Scrollbar */
 .inspector-panel__content::-webkit-scrollbar {
   width: 6px;

@@ -186,8 +186,9 @@ export class ViewportComponent implements OnDestroy {
     effect(() => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
       const selectedWallId: string | null = this.floorplanService.selectedWallId();
+      const openings: readonly import('@spacio/shared-types').IWallOpening[] = this.floorplanService.openings();
       if (!this._scene || !this._wallsGroup) return;
-      this._syncWalls(walls, selectedWallId);
+      this._syncWalls(walls, selectedWallId, openings);
     });
 
     effect(() => {
@@ -200,7 +201,7 @@ export class ViewportComponent implements OnDestroy {
       this._initializeThreeJS();
       this._startAnimationLoop();
       this._setupResizeObserver();
-      this._syncWalls(this.floorplanService.walls(), this.floorplanService.selectedWallId());
+      this._syncWalls(this.floorplanService.walls(), this.floorplanService.selectedWallId(), this.floorplanService.openings());
     });
   }
 
@@ -409,7 +410,7 @@ export class ViewportComponent implements OnDestroy {
     this._scene.add(this._floorsGroup);
     this._scene.add(this._wallsGroup);
     this._setupPreviewLine();
-    this._syncWalls(this.floorplanService.walls());
+    this._syncWalls(this.floorplanService.walls(), this.floorplanService.selectedWallId(), this.floorplanService.openings());
     this._syncFloors(this.floorplanService.floorPolygon());
   }
 
@@ -947,11 +948,15 @@ export class ViewportComponent implements OnDestroy {
     return `${WALL_MESH_PREFIX}${WALL_ID_SEPARATOR}${Date.now()}${WALL_ID_SEPARATOR}${Math.random().toString(36).slice(2, 7)}`;
   }
 
-  private _syncWalls(walls: ReadonlyArray<IWallSegment>, selectedWallId: string | null = null): void {
+  private _syncWalls(
+    walls: ReadonlyArray<IWallSegment>,
+    selectedWallId: string | null = null,
+    openings: ReadonlyArray<import('@spacio/shared-types').IWallOpening> = []
+  ): void {
     if (!this._wallsGroup) return;
     this._disposeWallsGroup();
 
-    const wallsMesh: THREE.Group = WallExtruder.createWallsMesh(walls, selectedWallId);
+    const wallsMesh: THREE.Group = WallExtruder.createWallsMesh(walls, selectedWallId, openings);
     while (wallsMesh.children.length > 0) {
       const child: THREE.Object3D = wallsMesh.children[0];
       this._wallsGroup.add(child);
