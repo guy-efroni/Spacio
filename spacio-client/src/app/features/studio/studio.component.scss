@@ -268,8 +268,14 @@
   top: 88px;
   right: 16px;
   bottom: 16px;
+  display: flex;
+  flex-direction: column;
   width: 340px;
+  min-width: 340px;
+  max-width: 340px;
+  flex: 0 0 340px;
   max-height: calc(100vh - 104px);
+  box-sizing: border-box;
   z-index: 40;
   pointer-events: auto;
   animation: inspectorSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
