@@ -29,6 +29,7 @@ import {
   WALL_SELECTION_OUTLINE_COLOR,
   WALL_Z_FIGHT_OFFSET_EPSILON,
   WALL_Z_FIGHT_THICKNESS_OFFSET_RATIO,
+  WallOpeningType,
 } from '@spacio/shared-types';
 
 const TRIM_THICKNESS = 0.06;
@@ -444,7 +445,7 @@ export class WallExtruder {
     right.name = `${OPENING_FRAME_PREFIX}-${opening.id}-right`;
     group.add(right);
 
-    if (opening.type === 'window') {
+    if (opening.type === WallOpeningType.Window) {
       const glassMaterial: THREE.MeshPhysicalMaterial = new THREE.MeshPhysicalMaterial({
         color: 0xcfe8ff,
         transparent: true,

@@ -148,7 +148,7 @@
           @for (opening of wallOpenings(); track opening.id) {
             <div class="inspector-panel__opening-card">
               <div class="inspector-panel__opening-header">
-                <span class="inspector-panel__opening-type">{{ opening.type === 'door' ? 'Door' : 'Window' }}</span>
+                <span class="inspector-panel__opening-type">{{ opening.type === wallOpeningType.Door ? 'Door' : 'Window' }}</span>
                 <button type="button" class="inspector-panel__icon-button" (click)="onRemoveOpening(opening.id)" title="Remove opening" aria-label="Remove opening">×</button>
               </div>
 

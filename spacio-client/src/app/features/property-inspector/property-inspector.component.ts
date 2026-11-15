@@ -31,6 +31,7 @@ import {
   MIN_WALL_PIER,
   MIN_WALL_THICKNESS,
   WALL_COLOR_PRESETS,
+  WallOpeningType,
 } from '@spacio/shared-types';
 
 type WallColorPreset = { readonly name: string; readonly value: string };
@@ -72,6 +73,7 @@ export class PropertyInspectorComponent {
   public readonly thickness: WritableSignal<number> = signal<number>(DEFAULT_WALL_THICKNESS);
   public readonly color: WritableSignal<string> = signal<string>('#e2e8f0');
 
+  public readonly wallOpeningType: typeof WallOpeningType = WallOpeningType;
   public readonly colorPresets: readonly WallColorPreset[] = WALL_COLOR_PRESETS;
   public readonly minHeight: number = MIN_WALL_HEIGHT;
   public readonly maxHeight: number = MAX_WALL_HEIGHT;
@@ -149,14 +151,14 @@ export class PropertyInspectorComponent {
   public onAddDoor(): void {
     const id: string | null = this._floorplanService.selectedWallId();
     if (id) {
-      this._floorplanService.addOpeningToWall(id, 'door');
+      this._floorplanService.addOpeningToWall(id, WallOpeningType.Door);
     }
   }
 
   public onAddWindow(): void {
     const id: string | null = this._floorplanService.selectedWallId();
     if (id) {
-      this._floorplanService.addOpeningToWall(id, 'window');
+      this._floorplanService.addOpeningToWall(id, WallOpeningType.Window);
     }
   }
 

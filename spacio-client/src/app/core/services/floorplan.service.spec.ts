@@ -4,6 +4,7 @@ import {
   IWallSegment,
   MIN_OPENING_GAP,
   MIN_WALL_PIER,
+  WallOpeningType,
 } from '@spacio/shared-types';
 import { getWallLength } from '../../shared/utils/opening.util';
 import { FloorplanService } from './floorplan.service';
@@ -39,8 +40,8 @@ describe('FloorplanService opening validation', () => {
   };
 
   it('adds multiple openings without overlapping them', () => {
-    expect(service.addOpeningToWall(wallId, 'door')).toBe(true);
-    expect(service.addOpeningToWall(wallId, 'window')).toBe(true);
+    expect(service.addOpeningToWall(wallId, WallOpeningType.Door)).toBe(true);
+    expect(service.addOpeningToWall(wallId, WallOpeningType.Window)).toBe(true);
 
     const openings: IWallOpening[] = getOpenings();
     expect(openings.length).toBe(2);
@@ -56,8 +57,8 @@ describe('FloorplanService opening validation', () => {
   });
 
   it('rejects or clamps an update that would collide with a neighbouring opening', () => {
-    service.addOpeningToWall(wallId, 'door');
-    service.addOpeningToWall(wallId, 'window');
+    service.addOpeningToWall(wallId, WallOpeningType.Door);
+    service.addOpeningToWall(wallId, WallOpeningType.Window);
 
     const openings: IWallOpening[] = getOpenings();
     const left: IWallOpening = openings[0];
@@ -76,8 +77,8 @@ describe('FloorplanService opening validation', () => {
   });
 
   it('jumps an opening to the next free gap when it passes a neighbour', () => {
-    service.addOpeningToWall(wallId, 'door');
-    service.addOpeningToWall(wallId, 'window');
+    service.addOpeningToWall(wallId, WallOpeningType.Door);
+    service.addOpeningToWall(wallId, WallOpeningType.Window);
 
     const openings: IWallOpening[] = getOpenings();
     const left: IWallOpening = openings[0];
@@ -98,7 +99,7 @@ describe('FloorplanService opening validation', () => {
   });
 
   it('clamps opening positions and widths to the wall boundaries', () => {
-    service.addOpeningToWall(wallId, 'door');
+    service.addOpeningToWall(wallId, WallOpeningType.Door);
     const opening: IWallOpening = getOpenings()[0];
     const wallLength: number = getWallLength(getWall());
 

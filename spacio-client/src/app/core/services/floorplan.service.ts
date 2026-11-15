@@ -11,6 +11,7 @@ import {
   IWallSegment,
   MAX_OPENING_WIDTH,
   MIN_OPENING_WIDTH,
+  WallOpeningType,
 } from '@spacio/shared-types';
 import {
   OpeningGap,
@@ -110,7 +111,7 @@ export class FloorplanService {
     this._selectedOpeningId.set(id);
   }
 
-  public addOpeningToWall(wallId: string, type: 'door' | 'window'): boolean {
+  public addOpeningToWall(wallId: string, type: WallOpeningType): boolean {
     const wall: IWallSegment | undefined = this._walls().find((item: IWallSegment) => item.id === wallId);
     if (!wall) {
       return false;
@@ -337,8 +338,8 @@ export class FloorplanService {
     return openings.map((opening: IWallOpening) => ({ ...opening }));
   }
 
-  private _createDefaultOpening(wallId: string, type: 'door' | 'window'): IWallOpening {
-    if (type === 'door') {
+  private _createDefaultOpening(wallId: string, type: WallOpeningType): IWallOpening {
+    if (type === WallOpeningType.Door) {
       return {
         id: this._generateOpeningId(),
         wallId,
