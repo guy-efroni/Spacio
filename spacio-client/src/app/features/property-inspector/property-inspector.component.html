@@ -145,7 +145,7 @@
         <p class="inspector-panel__empty">No doors or windows on this wall.</p>
       } @else {
         <div class="inspector-panel__openings-list">
-          @for (opening of wallOpenings(); track trackOpeningById($index, opening)) {
+          @for (opening of wallOpenings(); track opening.id) {
             <div class="inspector-panel__opening-card">
               <div class="inspector-panel__opening-header">
                 <span class="inspector-panel__opening-type">{{ opening.type === 'door' ? 'Door' : 'Window' }}</span>
@@ -154,25 +154,25 @@
 
               <label class="inspector-panel__field">
                 <span class="inspector-panel__field-label">Position (m)</span>
-                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.positionAlongWall" [min]="openingMinPosition(opening)" [max]="openingMaxPosition(opening)" [step]="openingPositionStep" (input)="onOpeningPositionChange(opening.id, $event.target.valueAsNumber)" />
-                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="opening.positionAlongWall" [min]="openingMinPosition(opening)" [max]="openingMaxPosition(opening)" [step]="openingPositionStep" (input)="onOpeningPositionChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening position slider" />
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.positionAlongWall)" [min]="openingMinPosition(opening)" [max]="openingMaxPosition(opening)" [step]="openingPositionStep" (change)="onOpeningPositionChange(opening.id, $event.target.valueAsNumber)" />
+                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="formatOpeningValue(opening.positionAlongWall)" [min]="openingMinPosition(opening)" [max]="openingMaxPosition(opening)" [step]="openingPositionStep" (input)="onOpeningPositionChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening position slider" />
               </label>
 
               <label class="inspector-panel__field">
                 <span class="inspector-panel__field-label">Width (m)</span>
-                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.width" [min]="minOpeningWidth" [max]="openingMaxWidth(opening)" [step]="openingWidthStep" (input)="onOpeningWidthChange(opening.id, $event.target.valueAsNumber)" />
-                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="opening.width" [min]="minOpeningWidth" [max]="openingMaxWidth(opening)" [step]="openingWidthStep" (input)="onOpeningWidthChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening width slider" />
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.width)" [min]="minOpeningWidth" [max]="openingMaxWidth(opening)" [step]="openingWidthStep" (change)="onOpeningWidthChange(opening.id, $event.target.valueAsNumber)" />
+                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="formatOpeningValue(opening.width)" [min]="minOpeningWidth" [max]="openingMaxWidth(opening)" [step]="openingWidthStep" (input)="onOpeningWidthChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening width slider" />
               </label>
 
               <label class="inspector-panel__field">
                 <span class="inspector-panel__field-label">Height (m)</span>
-                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.height" [min]="minOpeningHeight" [max]="openingMaxHeight(opening)" [step]="openingHeightStep" (input)="onOpeningHeightChange(opening.id, $event.target.valueAsNumber)" />
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.height)" [min]="minOpeningHeight" [max]="openingMaxHeight(opening)" [step]="openingHeightStep" (change)="onOpeningHeightChange(opening.id, $event.target.valueAsNumber)" />
               </label>
 
               <label class="inspector-panel__field">
                 <span class="inspector-panel__field-label">Elevation (m)</span>
-                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="opening.elevation" [min]="minOpeningElevation" [max]="openingMaxElevation(opening)" [step]="openingElevationStep" (input)="onOpeningElevationChange(opening.id, $event.target.valueAsNumber)" />
-                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="opening.elevation" [min]="minOpeningElevation" [max]="openingMaxElevation(opening)" [step]="openingElevationStep" (input)="onOpeningElevationChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening elevation slider" />
+                <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.elevation)" [min]="minOpeningElevation" [max]="openingMaxElevation(opening)" [step]="openingElevationStep" (change)="onOpeningElevationChange(opening.id, $event.target.valueAsNumber)" />
+                <input type="range" class="inspector-panel__slider inspector-panel__slider--opening" [value]="formatOpeningValue(opening.elevation)" [min]="minOpeningElevation" [max]="openingMaxElevation(opening)" [step]="openingElevationStep" (input)="onOpeningElevationChange(opening.id, $event.target.valueAsNumber)" aria-label="Opening elevation slider" />
               </label>
             </div>
           }

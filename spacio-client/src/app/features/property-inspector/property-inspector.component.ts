@@ -85,11 +85,7 @@ export class PropertyInspectorComponent {
     if (!id) return [];
     return this._floorplanService
       .openings()
-      .filter((opening: IWallOpening) => opening.wallId === id)
-      .sort(
-        (a: IWallOpening, b: IWallOpening) =>
-          a.positionAlongWall - b.positionAlongWall
-      );
+      .filter((opening: IWallOpening) => opening.wallId === id);
   });
 
   public readonly minOpeningWidth: number = MIN_OPENING_WIDTH;
@@ -98,10 +94,10 @@ export class PropertyInspectorComponent {
   public readonly maxOpeningHeight: number = MAX_OPENING_HEIGHT;
   public readonly minOpeningElevation: number = MIN_OPENING_ELEVATION;
   public readonly maxOpeningElevation: number = MAX_OPENING_ELEVATION;
-  public readonly openingWidthStep: number = 0.1;
-  public readonly openingHeightStep: number = 0.1;
+  public readonly openingWidthStep: number = 0.05;
+  public readonly openingHeightStep: number = 0.05;
   public readonly openingElevationStep: number = 0.05;
-  public readonly openingPositionStep: number = 0.01;
+  public readonly openingPositionStep: number = 0.05;
 
   public constructor() {
     // Initialize from selected wall when component is created
@@ -208,6 +204,10 @@ export class PropertyInspectorComponent {
     );
   }
 
+  public formatOpeningValue(value: number): string {
+    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+  }
+
   public onOpeningPositionChange(id: string, value: number): void {
     if (!Number.isFinite(value)) return;
     const opening: IWallOpening | undefined = this.wallOpenings().find(
@@ -256,9 +256,5 @@ export class PropertyInspectorComponent {
     this._floorplanService.updateOpening(id, {
       elevation: Math.min(this.openingMaxElevation(opening), Math.max(this.minOpeningElevation, value)),
     });
-  }
-
-  public trackOpeningById(_index: number, opening: IWallOpening): string {
-    return opening.id;
   }
 }
