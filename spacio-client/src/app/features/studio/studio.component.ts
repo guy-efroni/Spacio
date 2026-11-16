@@ -1,21 +1,9 @@
-import {
-  Component,
-  computed,
-  inject,
-  OnDestroy,
-  Signal,
-  viewChild,
-} from '@angular/core';
+﻿import { Component, computed, inject, OnDestroy, Signal, signal, WritableSignal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FloorplanService } from '../../core/services/floorplan.service';
 import { PropertyInspectorComponent } from '../property-inspector/property-inspector.component';
 import { ViewportComponent } from '../viewport/viewport.component';
-import {
-  ViewportToolMode,
-  HtmlTag,
-  KeyboardKey,
-  StudioViewChild,
-} from '@spacio/shared-types';
+import { HtmlTag, KeyboardKey, ParametricFurnitureCategory, StudioViewChild, ViewportToolMode } from '@spacio/shared-types';
 
 @Component({
   selector: 'app-studio',
@@ -27,20 +15,21 @@ import {
 })
 export class StudioComponent implements OnDestroy {
   private readonly _floorplanService: FloorplanService = inject(FloorplanService);
-  protected readonly viewportComponent: Signal<ViewportComponent> =
-    viewChild.required<ViewportComponent>(StudioViewChild.ViewportComponent);
+  protected readonly viewportComponent: Signal<ViewportComponent> = viewChild.required<ViewportComponent>(StudioViewChild.ViewportComponent);
+  protected readonly isCatalogOpen: WritableSignal<boolean> = signal<boolean>(false);
 
-  protected readonly wallCount: Signal<number> = computed<number>(
-    () => this._floorplanService.walls().length
-  );
-  protected readonly roomArea: Signal<number> = computed<number>(() =>
-    this._floorplanService.roomArea()
-  );
-
+  protected readonly wallCount: Signal<number> = computed<number>(() => this._floorplanService.walls().length);
+  protected readonly roomArea: Signal<number> = computed<number>(() => this._floorplanService.roomArea());
   protected readonly ViewportToolMode: typeof ViewportToolMode = ViewportToolMode;
-  private readonly _onKeyDown: (event: KeyboardEvent) => void = (
-    event: KeyboardEvent
-  ): void => this._handleKeyDown(event);
+
+  protected readonly furnitureCatalog: readonly { category: ParametricFurnitureCategory; label: string }[] = [
+    { category: 'table', label: 'Table' },
+    { category: 'sofa', label: 'Sofa' },
+    { category: 'bed', label: 'Bed' },
+    { category: 'storage', label: 'Shelf' },
+  ];
+
+  private readonly _onKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void => this._handleKeyDown(event);
 
   public constructor() {
     window.addEventListener('keydown', this._onKeyDown);
@@ -54,27 +43,29 @@ export class StudioComponent implements OnDestroy {
     this.viewportComponent().onResetRoom();
   }
 
-  protected readonly floorplanService: FloorplanService =
-    this._floorplanService;
+  protected readonly floorplanService: FloorplanService = this._floorplanService;
+
+  protected onToggleCatalog(): void {
+    this.isCatalogOpen.update((open: boolean) => !open);
+  }
+
+  protected onSelectFurniture(category: ParametricFurnitureCategory): void {
+    this.isCatalogOpen.set(false);
+    this.viewportComponent().onStartFurniturePlacement(category);
+  }
 
   private _handleKeyDown(event: KeyboardEvent): void {
-    if (this._isEditableTarget(event.target)) {
-      return;
-    }
+    if (this._isEditableTarget(event.target)) return;
 
     const key: string = event.key.toLowerCase();
-    const isUndo: boolean =
-      event.ctrlKey && !event.shiftKey && key === KeyboardKey.Undo;
-    const isRedo: boolean =
-      event.ctrlKey &&
-      (key === KeyboardKey.Redo || (event.shiftKey && key === KeyboardKey.Undo));
+    const isUndo: boolean = event.ctrlKey && !event.shiftKey && key === KeyboardKey.Undo;
+    const isRedo: boolean = event.ctrlKey && (key === KeyboardKey.Redo || (event.shiftKey && key === KeyboardKey.Undo));
 
     if (isUndo) {
       event.preventDefault();
       this._floorplanService.undo();
       return;
     }
-
     if (isRedo) {
       event.preventDefault();
       this._floorplanService.redo();
@@ -82,15 +73,8 @@ export class StudioComponent implements OnDestroy {
   }
 
   private _isEditableTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) {
-      return false;
-    }
+    if (!(target instanceof HTMLElement)) return false;
     const tagName: string = target.tagName;
-    return (
-      tagName === HtmlTag.Input ||
-      tagName === HtmlTag.TextArea ||
-      tagName === HtmlTag.Select ||
-      target.isContentEditable
-    );
+    return tagName === HtmlTag.Input || tagName === HtmlTag.TextArea || tagName === HtmlTag.Select || target.isContentEditable;
   }
 }

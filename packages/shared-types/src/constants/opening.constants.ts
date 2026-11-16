@@ -1,3 +1,7 @@
+import { WallOpeningType } from '../enums/wall-opening-type.enum';
+import { IMaterialSlot } from '../furniture/material-slot.interface';
+import { createMaterialSlot } from './furniture.constants';
+
 export const DEFAULT_DOOR_WIDTH = 0.9;
 export const DEFAULT_DOOR_HEIGHT = 2.1;
 export const DEFAULT_DOOR_ELEVATION = 0;
@@ -30,3 +34,25 @@ export const OPENING_MESH_PREFIX = 'opening';
 export const OPENING_FRAME_PREFIX = 'opening-frame';
 export const OPENING_GLASS_PREFIX = 'opening-glass';
 export const OPENING_DOOR_PREFIX = 'opening-door';
+
+export function createDefaultOpeningMaterials(type: WallOpeningType): Record<string, IMaterialSlot> {
+  if (type === WallOpeningType.Door) {
+    return {
+      frame: createMaterialSlot('frame', 'Frame', '#8b7355', 0.7, 0.05),
+      panel: createMaterialSlot('panel', 'Panel', '#6b4f3a', 0.8, 0.02),
+      hardware: createMaterialSlot('hardware', 'Hardware', '#c0c0c0', 0.3, 0.85),
+    };
+  }
+  return {
+    frame: createMaterialSlot('frame', 'Frame', '#d4d4d8', 0.45, 0.1),
+    glass: createMaterialSlot('glass', 'Glass', '#cfe8ff', 0.05, 0.0),
+    hardware: createMaterialSlot('hardware', 'Hardware', '#a1a1aa', 0.3, 0.8),
+  };
+}
+
+export function createDefaultOpeningStyleOptions(type: WallOpeningType): Record<string, string> {
+  if (type === WallOpeningType.Door) {
+    return { panelStyle: 'solid', swing: 'left' };
+  }
+  return { gridStyle: 'single', mullionStyle: 'none' };
+}
