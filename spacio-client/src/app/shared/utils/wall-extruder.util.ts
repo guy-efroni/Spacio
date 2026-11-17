@@ -30,9 +30,9 @@ import {
   createDefaultOpeningStyleOptions,
 } from '@spacio/shared-types';
 
-const TRIM_THICKNESS = 0.06;
-const TRIM_HEIGHT = 0.15;
-const SPAN_EPSILON = 1e-6;
+const TRIM_THICKNESS: number = 0.06;
+const TRIM_HEIGHT: number = 0.15;
+const SPAN_EPSILON: number = 1e-6;
 
 type IOpeningSpan = {
   start: number;
@@ -370,7 +370,7 @@ export class WallExtruder {
     // Baseboard only where floor touches (skip under openings with elevation ~0)
     let cursor: number = 0;
     let idx: number = 0;
-    const addBase = (from: number, to: number): void => {
+    const addBase= (from: number, to: number): void => {
       const segLength: number = to - from;
       if (segLength <= 0.01) return;
       const centerAlong: number = (from + to) / 2;
@@ -421,8 +421,8 @@ export class WallExtruder {
     });
 
     // Frame: top, bottom, left, right
-    const t = OPENING_FRAME_THICKNESS;
-    const top = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
+    const t: number = OPENING_FRAME_THICKNESS;
+    const top: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
     top.position.set(centerX, elevation + height + t / 2, centerZ);
     top.rotation.y = -dims.angle;
     top.castShadow = true;
@@ -430,7 +430,7 @@ export class WallExtruder {
     top.name = `${OPENING_FRAME_PREFIX}-${opening.id}-top`;
     group.add(top);
 
-    const bottom = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
+    const bottom: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
     bottom.position.set(centerX, elevation - t / 2, centerZ);
     bottom.rotation.y = -dims.angle;
     bottom.castShadow = true;
@@ -438,7 +438,7 @@ export class WallExtruder {
     bottom.name = `${OPENING_FRAME_PREFIX}-${opening.id}-bottom`;
     group.add(bottom);
 
-    const left = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
+    const left: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
     const leftAlong: number = span.start - t / 2;
     left.position.set(dims.startX + dims.dirX * leftAlong, centerY, dims.startZ + dims.dirZ * leftAlong);
     left.rotation.y = -dims.angle;
@@ -447,7 +447,7 @@ export class WallExtruder {
     left.name = `${OPENING_FRAME_PREFIX}-${opening.id}-left`;
     group.add(left);
 
-    const right = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
+    const right: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
     const rightAlong: number = span.end + t / 2;
     right.position.set(dims.startX + dims.dirX * rightAlong, centerY, dims.startZ + dims.dirZ * rightAlong);
     right.rotation.y = -dims.angle;
@@ -457,8 +457,8 @@ export class WallExtruder {
     group.add(right);
 
     if (opening.type === WallOpeningType.Window) {
-      const glassSlot = opening.materials['glass'];
-      const glassColor = glassSlot ? new THREE.Color(glassSlot.color) : new THREE.Color(0xcfe8ff);
+      const glassSlot= opening.materials['glass'];
+      const glassColor: THREE.Color = glassSlot ? new THREE.Color(glassSlot.color) : new THREE.Color(0xcfe8ff);
       const glassMaterial: THREE.MeshPhysicalMaterial = new THREE.MeshPhysicalMaterial({
         color: glassColor,
         transparent: true,
