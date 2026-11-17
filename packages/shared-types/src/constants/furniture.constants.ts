@@ -40,7 +40,7 @@ export function createDefaultFurnitureMaterials(category: ParametricFurnitureCat
     case 'table':
       return {
         top: createMaterialSlot('top', 'Top', '#8b5a2b', 0.55, 0.05),
-        legs: createMaterialSlot('legs', 'Legs', '#2f2f35', 0.35, 0.6),
+        legs: createMaterialSlot('legs', 'Legs', '#2f2f35', 0.35, 0.2),
       };
     case 'sofa':
       return {

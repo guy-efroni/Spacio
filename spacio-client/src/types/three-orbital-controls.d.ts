@@ -2,6 +2,11 @@ declare module 'three/examples/jsm/controls/OrbitControls' {
   import { Camera, EventDispatcher } from 'three';
   import { IOrbitControlsEventMap } from './IOrbitControlsEventMap';
 
+  interface IOrbitControlsEvent {
+    type: string;
+    [key: string]: string | object;
+  }
+
   export class OrbitControls extends EventDispatcher<IOrbitControlsEventMap> {
     constructor(object: Camera, domElement?: HTMLElement);
 
@@ -50,8 +55,8 @@ declare module 'three/examples/jsm/controls/OrbitControls' {
     connect(): void;
     disconnect(): void;
 
-    addEventListener(type: string, listener: (event: any) => void): void;
-    removeEventListener(type: string, listener: (event: any) => void): void;
-    dispatchEvent(event: { type: string; [key: string]: any }): void;
+    addEventListener(type: string, listener: (event: IOrbitControlsEvent) => void): void;
+    removeEventListener(type: string, listener: (event: IOrbitControlsEvent) => void): void;
+    dispatchEvent(event: IOrbitControlsEvent): void;
   }
 }

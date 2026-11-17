@@ -19,6 +19,14 @@ import {
   DEFAULT_WALL_THICKNESS,
   DELETE_KEY,
   ESCAPE_KEY,
+  FURNITURE_FLOOR_OFFSET,
+  FURNITURE_GHOST_FOOTPRINT_BORDER_COLOR,
+  FURNITURE_GHOST_FOOTPRINT_BORDER_OPACITY,
+  FURNITURE_GHOST_FOOTPRINT_FILL_COLOR,
+  FURNITURE_GHOST_FOOTPRINT_FILL_OPACITY,
+  FURNITURE_GHOST_FOOTPRINT_Y,
+  FURNITURE_GHOST_MATERIAL_OPACITY,
+  FURNITURE_GHOST_RENDER_ORDER,
   FURNITURE_ROTATION_STEP_RAD,
   FURNITURE_USER_DATA_TYPE,
   IParametricFurniture,
@@ -79,10 +87,11 @@ import {
   VIEWPORT_PREVIEW_LINE_OPACITY,
   VIEWPORT_RENDERER_POWER_PREFERENCE,
   VIEWPORT_ROOM_FLOOR_COLOR,
-  VIEWPORT_ROOM_FLOOR_HEIGHT_OFFSET,
   VIEWPORT_ROOM_FLOOR_METALNESS,
   VIEWPORT_ROOM_FLOOR_OPACITY,
   VIEWPORT_ROOM_FLOOR_ROUGHNESS,
+  VIEWPORT_ROOM_FLOOR_THICKNESS,
+  VIEWPORT_ROOM_FLOOR_TOP_Y,
   VIEWPORT_SHADOW_BIAS,
   VIEWPORT_SHADOW_CAMERA_EXTENT,
   VIEWPORT_SHADOW_CAMERA_FAR,
@@ -105,6 +114,31 @@ import { IGeneratedFurniture, buildParametricFurniture } from '../../shared/util
 const DEFAULT_INITIAL_WIDTH: number = typeof window !== 'undefined' ? window.innerWidth : 0;
 const DEFAULT_INITIAL_HEIGHT: number = typeof window !== 'undefined' ? window.innerHeight : 0;
 const FURNITURE_ROOT_GROUP_NAME: string = 'furniture-root';
+const FURNITURE_GHOST_FOOTPRINT_NAME: string = 'furniture-ghost-footprint';
+
+interface ISceneObjectUserData {
+  id?: string;
+  type?: string;
+}
+
+interface IFloorPlacementPoint {
+  x: number;
+  y: number;
+  placementY: number;
+}
+
+interface IFurnitureFootprint {
+  group: THREE.Group;
+  dispose: () => void;
+}
+
+interface IFurnitureGhost {
+  generated: IGeneratedFurniture;
+  clonedMaterials: THREE.MeshStandardMaterial[];
+  footprint: IFurnitureFootprint;
+  baseY: number;
+  dispose: () => void;
+}
 
 @Component({
   selector: 'app-viewport',
@@ -139,10 +173,11 @@ export class ViewportComponent implements OnDestroy {
 
   private _floorMesh?: THREE.Mesh;
   private _floorMaterial?: THREE.MeshStandardMaterial;
+  private _floorTopY: number = VIEWPORT_ROOM_FLOOR_TOP_Y;
 
   private readonly _raycaster: THREE.Raycaster = new THREE.Raycaster();
   private readonly _mouse: THREE.Vector2 = new THREE.Vector2();
-  private readonly _floorPlane: THREE.Plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly _floorPlane: THREE.Plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -VIEWPORT_ROOM_FLOOR_TOP_Y);
   private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
 
   private _drawingStartPoint: IRulerPoint | null = null;
@@ -171,7 +206,7 @@ export class ViewportComponent implements OnDestroy {
 
   private readonly _pendingFurnitureCategory: WritableSignal<ParametricFurnitureCategory | null> = signal<ParametricFurnitureCategory | null>(null);
   private _pendingFurnitureRotationY: number = 0;
-  private _furnitureGhost: IGeneratedFurniture | null = null;
+  private _furnitureGhost: IFurnitureGhost | null = null;
 
   private readonly _onPointerDown: (event: PointerEvent) => void = (event: PointerEvent): void => this._handlePointerDown(event);
   private readonly _onPointerMove: (event: PointerEvent) => void = (event: PointerEvent): void => this._handlePointerMove(event);
@@ -179,6 +214,7 @@ export class ViewportComponent implements OnDestroy {
   private readonly _onPointerCancel: () => void = (): void => {
     this._pointerDownPosition = null;
   };
+  private readonly _onContextMenu: (event: MouseEvent) => void = (event: MouseEvent): void => this._handleContextMenu(event);
   private readonly _onKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void => this._handleKeyDown(event);
   private readonly _onDoubleClick: (event: MouseEvent) => void = (event: MouseEvent): void => this._onCanvasDoubleClick(event);
 
@@ -233,6 +269,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   public onStartFurniturePlacement(category: ParametricFurnitureCategory): void {
+    this._removeFurnitureGhost();
     this._pendingFurnitureCategory.set(category);
     this._pendingFurnitureRotationY = 0;
     this._setToolMode(ViewportToolMode.PlaceFurniture);
@@ -263,6 +300,8 @@ export class ViewportComponent implements OnDestroy {
     const selectedFurnitureId: string | null = this.floorplanService.selectedFurnitureId();
     if (selectedFurnitureId) {
       this.floorplanService.removeFurniture(selectedFurnitureId);
+      this.floorplanService.selectFurniture(null);
+      this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
     }
   }
 
@@ -299,6 +338,8 @@ export class ViewportComponent implements OnDestroy {
         this.floorplanService.selectFurniture(null);
       }
     }
+
+    this._updateOrbitControlsMouseButtons(mode);
   }
 
   private _cancelDrawingInternal(): void {
@@ -320,6 +361,15 @@ export class ViewportComponent implements OnDestroy {
   private _cancelFurniturePlacementInternal(): void {
     this._pendingFurnitureCategory.set(null);
     this._removeFurnitureGhost();
+  }
+
+  private _updateOrbitControlsMouseButtons(mode: ViewportToolMode): void {
+    if (!this._controls) return;
+    if (mode === ViewportToolMode.PlaceFurniture) {
+      this._controls.enablePan = false;
+    } else {
+      this._controls.enablePan = true;
+    }
   }
 
   private _initializeThreeJS(): void {
@@ -364,6 +414,7 @@ export class ViewportComponent implements OnDestroy {
     this._controls.maxPolarAngle = VIEWPORT_MAX_POLAR_ANGLE;
     this._controls.minDistance = VIEWPORT_MIN_DISTANCE;
     this._controls.maxDistance = VIEWPORT_MAX_DISTANCE;
+    this._controls.enablePan = true;
 
     this._setupScene();
     this._setupInteractions();
@@ -457,37 +508,53 @@ export class ViewportComponent implements OnDestroy {
     canvas.addEventListener('pointermove', this._onPointerMove);
     canvas.addEventListener('pointerup', this._onPointerUp);
     canvas.addEventListener('pointercancel', this._onPointerCancel);
+    canvas.addEventListener('contextmenu', this._onContextMenu);
     canvas.addEventListener('dblclick', this._onDoubleClick);
     window.addEventListener('keydown', this._onKeyDown);
   }
 
   private _handlePointerDown(event: PointerEvent): void {
-    if (event.button !== PRIMARY_POINTER_BUTTON) return;
+    const isRightClick: boolean = event.button === 2;
+    const isPrimaryClick: boolean = event.button === PRIMARY_POINTER_BUTTON;
 
     if (this.isDrawingMode()) {
+      if (!isPrimaryClick) return;
       this._pointerDownPosition = null;
       this._handleDrawingPointerDown(event);
       return;
     }
     if (this.isRulerMode()) {
+      if (!isPrimaryClick) return;
       this._pointerDownPosition = null;
       this._handleRulerPointerDown(event);
       return;
     }
     if (this.isPlacingFurnitureMode()) {
-      this._pointerDownPosition = null;
-      this._handleFurniturePlacementPointerDown(event);
+      if (isPrimaryClick) {
+        this._pointerDownPosition = null;
+        this._handleFurniturePlacementPointerDown(event);
+        return;
+      }
+      if (isRightClick) {
+        this._pointerDownPosition = null;
+        this._cancelFurniturePlacement();
+        return;
+      }
       return;
     }
 
-    this._pointerDownPosition = { x: event.clientX, y: event.clientY };
+    if (isPrimaryClick) {
+      this._pointerDownPosition = { x: event.clientX, y: event.clientY };
+    }
   }
 
   private _handlePointerUp(event: PointerEvent): void {
     const downPosition: { x: number; y: number } | null = this._pointerDownPosition;
     this._pointerDownPosition = null;
 
-    if (!downPosition || event.button !== PRIMARY_POINTER_BUTTON) return;
+    const isPrimaryClick: boolean = event.button === PRIMARY_POINTER_BUTTON;
+
+    if (!downPosition || !isPrimaryClick) return;
     if (this.isDrawingMode() || this.isRulerMode() || this.isPlacingFurnitureMode()) return;
 
     const dragDistance: number = Math.hypot(event.clientX - downPosition.x, event.clientY - downPosition.y);
@@ -538,14 +605,22 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _handleFurniturePlacementPointerDown(event: PointerEvent): void {
+    event.stopPropagation();
     const category: ParametricFurnitureCategory | null = this._pendingFurnitureCategory();
     if (!category) return;
-    const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+    const point: IFloorPlacementPoint | null = this._getFurniturePlacementPoint(event);
     if (!point) return;
+
     const item: IParametricFurniture = this.floorplanService.createDefaultFurniture(category, { x: point.x, y: 0, z: point.y });
     item.rotationY = this._pendingFurnitureRotationY;
+
+    // Commit placement before clearing preview/tool state so the item persists in state and scene sync.
     this.floorplanService.addFurniture(item);
-    this._finishFurniturePlacement();
+    this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
+
+    this._removeFurnitureGhost();
+    this._pendingFurnitureCategory.set(null);
+    this._setToolMode(ViewportToolMode.View);
   }
 
   private _onCanvasDoubleClick(event: MouseEvent): void {
@@ -556,6 +631,14 @@ export class ViewportComponent implements OnDestroy {
       return;
     }
     this.floorplanService.selectWall(this._pickWallId(event.clientX, event.clientY));
+  }
+
+  private _handleContextMenu(event: MouseEvent): void {
+    if (this.isPlacingFurnitureMode()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this._cancelFurniturePlacement();
+    }
   }
 
   private _pickWallId(clientX: number, clientY: number): string | null {
@@ -571,9 +654,9 @@ export class ViewportComponent implements OnDestroy {
     const intersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObjects(this._wallsGroup.children, true);
 
     for (const intersection of intersections) {
-      const userData: Record<string, unknown> = intersection.object.userData as Record<string, unknown>;
+      const userData: ISceneObjectUserData = intersection.object.userData as ISceneObjectUserData;
       if (this._isWallMeshUserData(userData)) {
-        return (userData as IWallMeshUserData).id;
+        return userData.id;
       }
     }
     return null;
@@ -590,10 +673,9 @@ export class ViewportComponent implements OnDestroy {
     for (const intersection of intersections) {
       let obj: THREE.Object3D | null = intersection.object;
       while (obj) {
-        const id: unknown = obj.userData['id'];
-        const type: unknown = obj.userData['type'];
-        if (type === FURNITURE_USER_DATA_TYPE && typeof id === 'string') {
-          return id;
+        const userData: ISceneObjectUserData = obj.userData as ISceneObjectUserData;
+        if (userData.type === FURNITURE_USER_DATA_TYPE && typeof userData.id === 'string') {
+          return userData.id;
         }
         obj = obj.parent;
       }
@@ -601,8 +683,8 @@ export class ViewportComponent implements OnDestroy {
     return null;
   }
 
-  private _isWallMeshUserData(userData: Record<string, unknown>): userData is IWallMeshUserData {
-    return userData['type'] === WALL_USER_DATA_TYPE && typeof userData['id'] === 'string';
+  private _isWallMeshUserData(userData: ISceneObjectUserData): userData is IWallMeshUserData {
+    return userData.type === WALL_USER_DATA_TYPE && typeof userData.id === 'string';
   }
 
   private _handlePointerMove(event: PointerEvent): void {
@@ -617,7 +699,7 @@ export class ViewportComponent implements OnDestroy {
       if (!point) return;
       this._updateRulerPreview(point);
     } else if (this.isPlacingFurnitureMode()) {
-      const point: { x: number; y: number } | null = this._getSnappedFloorPoint(event);
+      const point: IFloorPlacementPoint | null = this._getFurniturePlacementPoint(event);
       this._updateFurnitureGhostAtCursor(point);
     }
   }
@@ -642,6 +724,9 @@ export class ViewportComponent implements OnDestroy {
     if (this.isDrawingMode() || this.isRulerMode() || this.isPlacingFurnitureMode()) return;
     if (this._isEditableTarget(event.target)) return;
 
+    const hasSelection: boolean = this.floorplanService.selectedWallId() !== null || this.floorplanService.selectedFurnitureId() !== null;
+    if (!hasSelection) return;
+    event.preventDefault();
     this.onDeleteSelectedWall();
   }
 
@@ -808,6 +893,26 @@ export class ViewportComponent implements OnDestroy {
     this.rulerBadgePosition.set(null);
   }
 
+  private _getFurniturePlacementPoint(event: PointerEvent): IFloorPlacementPoint | null {
+    if (!this._renderer || !this._camera) return null;
+    const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this._raycaster.setFromCamera(this._mouse, this._camera);
+
+    const planeIntersection: THREE.Vector3 | null = this._raycaster.ray.intersectPlane(this._floorPlane, this._intersectionPoint);
+    let hitPoint: THREE.Vector3 | null = planeIntersection;
+    if (!hitPoint && this._floorMesh) {
+      const floorIntersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObject(this._floorMesh, false);
+      if (floorIntersections.length > 0) hitPoint = floorIntersections[0].point;
+    }
+    if (!hitPoint) return null;
+
+    const placementY: number = Math.max(hitPoint.y, this._floorTopY) + FURNITURE_FLOOR_OFFSET;
+    return { x: this._snapToGrid(hitPoint.x), y: this._snapToGrid(hitPoint.z), placementY };
+  }
+
   private _getSnappedFloorPoint(event: PointerEvent): { x: number; y: number } | null {
     if (!this._renderer || !this._camera) return null;
     const rect: DOMRect = this._renderer.domElement.getBoundingClientRect();
@@ -815,6 +920,17 @@ export class ViewportComponent implements OnDestroy {
     this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     this._raycaster.setFromCamera(this._mouse, this._camera);
+
+    if (this._floorMesh) {
+      const floorIntersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObject(this._floorMesh, false);
+      if (floorIntersections.length > 0) {
+        const hit: THREE.Vector3 = floorIntersections[0].point;
+        const x: number = this._snapToGrid(hit.x);
+        const z: number = this._snapToGrid(hit.z);
+        return { x, y: z };
+      }
+    }
+
     const intersection: THREE.Vector3 | null = this._raycaster.ray.intersectPlane(this._floorPlane, this._intersectionPoint);
     if (!intersection) return null;
     const x: number = this._snapToGrid(this._intersectionPoint.x);
@@ -966,6 +1082,10 @@ export class ViewportComponent implements OnDestroy {
 
     for (const item of furniture) {
       const generated: IGeneratedFurniture = buildParametricFurniture(item);
+      generated.group.position.set(item.position.x, this._getFurniturePlacementY(), item.position.z);
+      generated.group.rotation.y = item.rotationY;
+      generated.group.visible = true;
+      generated.group.renderOrder = 1;
       this._applyFurnitureSelectionHighlight(generated.group, item.id === selectedId);
       this._furnitureGroup.add(generated.group);
       this._furnitureInstances.set(item.id, generated);
@@ -991,41 +1111,165 @@ export class ViewportComponent implements OnDestroy {
     });
   }
 
-  private _updateFurnitureGhostAtCursor(point: { x: number; y: number } | null): void {
+  private _updateFurnitureGhostAtCursor(point: IFloorPlacementPoint | null): void {
     const category: ParametricFurnitureCategory | null = this._pendingFurnitureCategory();
     if (!category || !this._scene) {
       this._removeFurnitureGhost();
       return;
     }
-    const pos: { x: number; y: number } = point ?? { x: 0, y: 0 };
+
     if (!this._furnitureGhost) {
-      const temp: IParametricFurniture = this.floorplanService.createDefaultFurniture(category, { x: pos.x, y: 0, z: pos.y });
+      const posX: number = point?.x ?? 0;
+      const posZ: number = point?.y ?? 0;
+      const temp: IParametricFurniture = this.floorplanService.createDefaultFurniture(category, { x: posX, y: 0, z: posZ });
       temp.rotationY = this._pendingFurnitureRotationY;
-      this._furnitureGhost = buildParametricFurniture(temp);
-      this._furnitureGhost.group.traverse((obj: THREE.Object3D): void => {
-        const mesh: THREE.Mesh = obj as THREE.Mesh;
-        const mat: THREE.Material | THREE.Material[] | undefined = mesh.material as THREE.Material | THREE.Material[] | undefined;
-        if (!mat) return;
-        const mats: THREE.Material[] = Array.isArray(mat) ? mat : [mat];
-        mats.forEach((m: THREE.Material): void => {
-          const std = m as THREE.MeshStandardMaterial;
-          std.transparent = true;
-          std.opacity = 0.45;
-          std.depthWrite = false;
-        });
-      });
-      this._scene.add(this._furnitureGhost.group);
-    } else {
-      this._furnitureGhost.group.rotation.y = this._pendingFurnitureRotationY;
+      const generated: IGeneratedFurniture = buildParametricFurniture(temp);
+      const clonedMaterials: THREE.MeshStandardMaterial[] = this._applyGhostMaterials(generated);
+      const footprint: IFurnitureFootprint = this._createFurnitureFootprint(temp.dimensions.width, temp.dimensions.depth);
+      const baseY: number = generated.group.position.y;
+      const placementY: number = point?.placementY ?? this._getFurniturePlacementY();
+
+      generated.group.position.set(posX, placementY + baseY, posZ);
+      generated.group.rotation.y = this._pendingFurnitureRotationY;
+      generated.group.renderOrder = FURNITURE_GHOST_RENDER_ORDER;
+      generated.group.visible = true;
+      footprint.group.position.set(posX, this._floorTopY, posZ);
+      footprint.group.rotation.y = this._pendingFurnitureRotationY;
+
+      this._furnitureGhost = {
+        generated,
+        clonedMaterials,
+        footprint,
+        baseY,
+        dispose: (): void => {
+          footprint.dispose();
+          clonedMaterials.forEach((material: THREE.MeshStandardMaterial): void => material.dispose());
+          generated.dispose();
+        },
+      };
+
+      this._scene.add(generated.group);
+      this._scene.add(footprint.group);
+      return;
     }
-    this._furnitureGhost.group.position.set(pos.x, 0, pos.y);
+
+    const ghost: IFurnitureGhost = this._furnitureGhost;
+    ghost.generated.group.rotation.y = this._pendingFurnitureRotationY;
+    ghost.footprint.group.rotation.y = this._pendingFurnitureRotationY;
+    if (point) {
+      ghost.generated.group.position.set(point.x, point.placementY + ghost.baseY, point.y);
+      ghost.footprint.group.position.set(point.x, this._floorTopY, point.y);
+    }
+  }
+
+  private _applyGhostMaterials(generated: IGeneratedFurniture): THREE.MeshStandardMaterial[] {
+    const materialCache: Map<THREE.Material, THREE.MeshStandardMaterial> = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+    const sourceMaterials: Set<THREE.Material> = new Set<THREE.Material>();
+    const clonedMaterials: THREE.MeshStandardMaterial[] = [];
+
+    generated.group.traverse((obj: THREE.Object3D): void => {
+      const mesh: THREE.Mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const originalMaterial: THREE.Material | THREE.Material[] | undefined = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      if (!originalMaterial) return;
+
+      const isArray = Array.isArray(originalMaterial);
+      const sourceMaterialsForMesh: THREE.Material[] = isArray ? originalMaterial : [originalMaterial];
+      const clonedMaterialsForMesh: THREE.MeshStandardMaterial[] = sourceMaterialsForMesh.map((source: THREE.Material): THREE.MeshStandardMaterial => {
+        sourceMaterials.add(source);
+        const cachedMaterial: THREE.MeshStandardMaterial | undefined = materialCache.get(source);
+        if (cachedMaterial) return cachedMaterial;
+
+        const standardMaterial: THREE.MeshStandardMaterial = source as THREE.MeshStandardMaterial;
+        const clonedMaterial: THREE.MeshStandardMaterial = standardMaterial.clone();
+        clonedMaterial.transparent = false;
+        clonedMaterial.opacity = FURNITURE_GHOST_MATERIAL_OPACITY;
+        clonedMaterial.depthWrite = true;
+        clonedMaterial.depthTest = true;
+        clonedMaterial.side = THREE.FrontSide;
+        clonedMaterial.needsUpdate = true;
+        materialCache.set(source, clonedMaterial);
+        clonedMaterials.push(clonedMaterial);
+        return clonedMaterial;
+      });
+
+      mesh.material = isArray ? clonedMaterialsForMesh : clonedMaterialsForMesh[0];
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+    });
+
+    sourceMaterials.forEach((material: THREE.Material): void => material.dispose());
+    return clonedMaterials;
+  }
+
+  private _createFurnitureFootprint(width: number, depth: number): IFurnitureFootprint {
+    const group: THREE.Group = new THREE.Group();
+    group.name = FURNITURE_GHOST_FOOTPRINT_NAME;
+
+    const fillGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(width, depth);
+    const fillMaterial: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial({
+      color: FURNITURE_GHOST_FOOTPRINT_FILL_COLOR,
+      transparent: true,
+      opacity: FURNITURE_GHOST_FOOTPRINT_FILL_OPACITY,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+    });
+    const fill: THREE.Mesh = new THREE.Mesh(fillGeometry, fillMaterial);
+    fill.rotation.x = -Math.PI / 2;
+    fill.position.y = FURNITURE_GHOST_FOOTPRINT_Y;
+    fill.renderOrder = FURNITURE_GHOST_RENDER_ORDER + 1;
+    group.add(fill);
+
+    const halfWidth: number = width / 2;
+    const halfDepth: number = depth / 2;
+    const borderGeometry: THREE.BufferGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-halfWidth, FURNITURE_GHOST_FOOTPRINT_Y, -halfDepth),
+      new THREE.Vector3(halfWidth, FURNITURE_GHOST_FOOTPRINT_Y, -halfDepth),
+      new THREE.Vector3(halfWidth, FURNITURE_GHOST_FOOTPRINT_Y, halfDepth),
+      new THREE.Vector3(-halfWidth, FURNITURE_GHOST_FOOTPRINT_Y, halfDepth),
+    ]);
+    const borderMaterial: THREE.LineBasicMaterial = new THREE.LineBasicMaterial({
+      color: FURNITURE_GHOST_FOOTPRINT_BORDER_COLOR,
+      linewidth: 1,
+      transparent: true,
+      opacity: FURNITURE_GHOST_FOOTPRINT_BORDER_OPACITY,
+      depthWrite: false,
+      depthTest: true,
+    });
+    const border: THREE.LineLoop = new THREE.LineLoop(borderGeometry, borderMaterial);
+    border.renderOrder = FURNITURE_GHOST_RENDER_ORDER + 2;
+    group.add(border);
+
+    return {
+      group,
+      dispose: (): void => {
+        fillGeometry.dispose();
+        fillMaterial.dispose();
+        borderGeometry.dispose();
+        borderMaterial.dispose();
+      },
+    };
   }
 
   private _removeFurnitureGhost(): void {
     if (!this._furnitureGhost) return;
-    if (this._scene) this._scene.remove(this._furnitureGhost.group);
+    if (this._scene) {
+      this._scene.remove(this._furnitureGhost.generated.group);
+      this._scene.remove(this._furnitureGhost.footprint.group);
+    }
     this._furnitureGhost.dispose();
     this._furnitureGhost = null;
+  }
+
+  private _syncGhostElevation(): void {
+    if (!this._furnitureGhost) return;
+    this._furnitureGhost.generated.group.position.y = this._getFurniturePlacementY() + this._furnitureGhost.baseY;
+    this._furnitureGhost.footprint.group.position.y = this._floorTopY;
+  }
+
+  private _getFurniturePlacementY(): number {
+    return this._floorTopY + FURNITURE_FLOOR_OFFSET;
   }
 
   private _syncFloors(polygon: readonly { x: number; y: number }[] | null): void {
@@ -1039,14 +1283,23 @@ export class ViewportComponent implements OnDestroy {
       this._floorMaterial = undefined;
     }
 
-    if (!polygon || polygon.length < 3) return;
+    if (!polygon || polygon.length < 3) {
+      this._resetFloorElevation();
+      return;
+    }
 
     const validPoints: { x: number; y: number }[] = [];
     for (const point of polygon) {
-      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+        this._resetFloorElevation();
+        return;
+      }
       validPoints.push(point);
     }
-    if (validPoints.length < 3) return;
+    if (validPoints.length < 3) {
+      this._resetFloorElevation();
+      return;
+    }
 
     const shape: THREE.Shape = new THREE.Shape();
     shape.moveTo(validPoints[0].x, validPoints[0].y);
@@ -1054,21 +1307,40 @@ export class ViewportComponent implements OnDestroy {
       shape.lineTo(validPoints[i].x, validPoints[i].y);
     }
 
-    const geometry: THREE.ShapeGeometry = new THREE.ShapeGeometry(shape);
+    const geometry: THREE.ExtrudeGeometry = new THREE.ExtrudeGeometry(shape, {
+      depth: VIEWPORT_ROOM_FLOOR_THICKNESS,
+      bevelEnabled: false,
+    });
     this._floorMaterial = new THREE.MeshStandardMaterial({
       color: VIEWPORT_ROOM_FLOOR_COLOR,
       transparent: true,
       opacity: VIEWPORT_ROOM_FLOOR_OPACITY,
       roughness: VIEWPORT_ROOM_FLOOR_ROUGHNESS,
       metalness: VIEWPORT_ROOM_FLOOR_METALNESS,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
     });
     const mesh: THREE.Mesh = new THREE.Mesh(geometry, this._floorMaterial);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = VIEWPORT_ROOM_FLOOR_HEIGHT_OFFSET;
+    mesh.position.y = VIEWPORT_ROOM_FLOOR_TOP_Y;
     mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.renderOrder = 0;
     mesh.name = ROOM_FLOOR_MESH_NAME;
     this._floorsGroup.add(mesh);
     this._floorMesh = mesh;
+
+    const floorBox: THREE.Box3 = new THREE.Box3().setFromObject(this._floorsGroup);
+    this._floorTopY = Number.isFinite(floorBox.max.y) ? floorBox.max.y : VIEWPORT_ROOM_FLOOR_TOP_Y;
+    this._floorPlane.set(new THREE.Vector3(0, 1, 0), -this._floorTopY);
+    this._syncGhostElevation();
+  }
+
+  private _resetFloorElevation(): void {
+    this._floorTopY = VIEWPORT_ROOM_FLOOR_TOP_Y;
+    this._floorPlane.set(new THREE.Vector3(0, 1, 0), -this._floorTopY);
+    this._syncGhostElevation();
   }
 
   private _startAnimationLoop(): void {
@@ -1121,6 +1393,7 @@ export class ViewportComponent implements OnDestroy {
       canvas.removeEventListener('pointermove', this._onPointerMove);
       canvas.removeEventListener('pointerup', this._onPointerUp);
       canvas.removeEventListener('pointercancel', this._onPointerCancel);
+      canvas.removeEventListener('contextmenu', this._onContextMenu);
       canvas.removeEventListener('dblclick', this._onDoubleClick);
       window.removeEventListener('keydown', this._onKeyDown);
       if (canvas.parentElement) canvas.parentElement.removeChild(canvas);

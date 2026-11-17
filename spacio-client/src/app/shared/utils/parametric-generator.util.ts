@@ -12,11 +12,14 @@ export interface IGeneratedOpeningMeshes {
 }
 
 export function createMaterialFromSlot(slot: IMaterialSlot): THREE.MeshStandardMaterial {
+  const clampedRoughness: number = Math.min(Math.max(slot.roughness, 0), 1);
+  const rawMetalness: number = Math.min(Math.max(slot.metalness, 0), 1);
+  const effectiveMetalness: number = rawMetalness >= 0.8 ? rawMetalness : Math.min(rawMetalness, 0.2);
   const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(slot.color),
-    roughness: slot.roughness,
-    metalness: slot.metalness,
+    roughness: clampedRoughness,
+    metalness: effectiveMetalness,
   });
+  material.color.setStyle(slot.color, THREE.SRGBColorSpace);
   material.name = slot.key;
   return material;
 }
@@ -26,6 +29,16 @@ export function disposeObject3D(root: THREE.Object3D): void {
     const mesh = obj as THREE.Mesh;
     if (mesh.geometry) {
       mesh.geometry.dispose();
+    }
+    if ((obj as THREE.LineSegments).isLineSegments) {
+      const line = obj as THREE.LineSegments;
+      line.geometry?.dispose();
+      const lineMat = line.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(lineMat)) {
+        lineMat.forEach((m: THREE.Material) => m.dispose());
+      } else if (lineMat) {
+        lineMat.dispose();
+      }
     }
     const material = (mesh as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
     if (Array.isArray(material)) {
@@ -197,8 +210,39 @@ export function buildParametricFurniture(item: IParametricFurniture): IGenerated
   group.name = item.id;
   group.userData = { type: 'furniture', id: item.id, category: item.category };
   group.add(body);
-  group.position.set(item.position.x, item.position.y, item.position.z);
+
+  group.position.set(item.position.x, 0, item.position.z);
   group.rotation.y = item.rotationY;
+  group.updateMatrixWorld(true);
+  const bounds: THREE.Box3 = new THREE.Box3().setFromObject(group);
+  if (Number.isFinite(bounds.min.y) && Number.isFinite(bounds.max.y)) {
+    group.position.y -= bounds.min.y;
+  }
+
+  group.traverse((obj: THREE.Object3D): void => {
+    obj.frustumCulled = false;
+    const mesh: THREE.Mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.visible = true;
+    const material: THREE.Material | THREE.Material[] | undefined = mesh.material as THREE.Material | THREE.Material[] | undefined;
+    if (!material) return;
+    const mats: THREE.Material[] = Array.isArray(material) ? material : [material];
+    mats.forEach((m: THREE.Material): void => {
+      const std: THREE.MeshStandardMaterial = m as THREE.MeshStandardMaterial;
+      std.transparent = false;
+      std.opacity = 1;
+      std.depthWrite = true;
+      std.depthTest = true;
+      std.side = THREE.FrontSide;
+      std.visible = true;
+      std.vertexColors = false;
+      std.needsUpdate = true;
+    });
+  });
+
+  group.updateMatrixWorld(true);
   return {
     group,
     dispose: (): void => disposeObject3D(group),
