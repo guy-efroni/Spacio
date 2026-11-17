@@ -7,6 +7,7 @@ import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
   INITIAL_SQUARE_ROOM,
+  IMaterialSlot,
   IParametricFurniture,
   IWallOpening,
   IWallSegment,
@@ -35,6 +36,8 @@ const OPENING_EPSILON: number = 1e-6;
 const MAX_HISTORY_DEPTH: number = 50;
 const EDGE_KEY_SEPARATOR: string = '->';
 const POINT_KEY_SEPARATOR: string = ',';
+
+type IMaterialSlotMap = Record<string, IMaterialSlot>;
 
 type IFloorplanSnapshot = {
   walls: IWallSegment[];
@@ -445,19 +448,16 @@ export class FloorplanService {
     };
   }
 
-  private _cloneMaterials(materials: Record<string, import('@spacio/shared-types').IMaterialSlot>): Record<string, import('@spacio/shared-types').IMaterialSlot> {
-    const cloned: Record<string, import('@spacio/shared-types').IMaterialSlot> = {};
+  private _cloneMaterials(materials: IMaterialSlotMap): IMaterialSlotMap {
+    const cloned: IMaterialSlotMap = {};
     for (const [key, slot] of Object.entries(materials)) {
       cloned[key] = { ...slot };
     }
     return cloned;
   }
 
-  private _mergeMaterialSlots(
-    current: Record<string, import('@spacio/shared-types').IMaterialSlot>,
-    updates: Record<string, import('@spacio/shared-types').IMaterialSlot>
-  ): Record<string, import('@spacio/shared-types').IMaterialSlot> {
-    const merged: Record<string, import('@spacio/shared-types').IMaterialSlot> = this._cloneMaterials(current);
+  private _mergeMaterialSlots(current: IMaterialSlotMap, updates: IMaterialSlotMap): IMaterialSlotMap {
+    const merged: IMaterialSlotMap = this._cloneMaterials(current);
     for (const [key, slot] of Object.entries(updates)) {
       merged[key] = { ...(merged[key] ?? slot), ...slot };
     }
