@@ -1,37 +1,39 @@
 ﻿import { Component, computed, inject, OnDestroy, Signal, signal, WritableSignal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { FloorplanService } from '../../core/services/floorplan.service';
+import { BlueprintService } from '../../core/services/blueprint.service';
 import { PropertyInspectorComponent } from '../property-inspector/property-inspector.component';
 import { ViewportComponent } from '../viewport/viewport.component';
-import { HtmlTag, KeyboardKey, ParametricFurnitureCategory, StudioViewChild, ViewportToolMode } from '@spacio/shared-types';
+import { WorkspaceNavComponent } from '../../shared/components/workspace-nav.component';
+import { HtmlTag, IFurnitureBlueprint, KeyboardKey, StudioViewChild, ViewportToolMode } from '@spacio/shared-types';
 
 @Component({
   selector: 'app-studio',
   standalone: true,
-  imports: [DecimalPipe, PropertyInspectorComponent, ViewportComponent],
+  imports: [DecimalPipe, PropertyInspectorComponent, ViewportComponent, WorkspaceNavComponent],
   providers: [FloorplanService],
   templateUrl: './studio.component.html',
   styleUrl: './studio.component.scss',
 })
 export class StudioComponent implements OnDestroy {
   private readonly _floorplanService: FloorplanService = inject(FloorplanService);
+  private readonly _blueprintService: BlueprintService = inject(BlueprintService);
+  private readonly _router: Router = inject(Router);
   protected readonly viewportComponent: Signal<ViewportComponent> = viewChild.required<ViewportComponent>(StudioViewChild.ViewportComponent);
   protected readonly isCatalogOpen: WritableSignal<boolean> = signal<boolean>(false);
 
   protected readonly wallCount: Signal<number> = computed<number>(() => this._floorplanService.walls().length);
   protected readonly roomArea: Signal<number> = computed<number>(() => this._floorplanService.roomArea());
   protected readonly ViewportToolMode: typeof ViewportToolMode = ViewportToolMode;
-
-  protected readonly furnitureCatalog: readonly { category: ParametricFurnitureCategory; label: string }[] = [
-    { category: 'table', label: 'Table' },
-    { category: 'sofa', label: 'Sofa' },
-    { category: 'bed', label: 'Bed' },
-    { category: 'storage', label: 'Shelf' },
-  ];
+  protected readonly furnitureCatalog: Signal<readonly IFurnitureBlueprint[]> = this._blueprintService.blueprints;
+  protected readonly isCatalogLoading: Signal<boolean> = this._blueprintService.isLoading;
+  protected readonly catalogError: Signal<string | null> = this._blueprintService.error;
 
   private readonly _onKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void => this._handleKeyDown(event);
 
   public constructor() {
+    this._blueprintService.load();
     window.addEventListener('keydown', this._onKeyDown);
   }
 
@@ -49,9 +51,17 @@ export class StudioComponent implements OnDestroy {
     this.isCatalogOpen.update((open: boolean) => !open);
   }
 
-  protected onSelectFurniture(category: ParametricFurnitureCategory): void {
+  protected onSelectFurniture(blueprint: IFurnitureBlueprint): void {
     this.isCatalogOpen.set(false);
-    this.viewportComponent().onStartFurniturePlacement(category);
+    this.viewportComponent().onStartFurniturePlacement(blueprint);
+  }
+
+  protected onOpenCraftRoom(): void {
+    const selected = this._floorplanService.furniture().find((item) => item.id === this._floorplanService.selectedFurnitureId());
+    if (selected) {
+      this._blueprintService.setEditSourceFromPlaced(selected);
+    }
+    void this._router.navigate(['/craft']);
   }
 
   private _handleKeyDown(event: KeyboardEvent): void {

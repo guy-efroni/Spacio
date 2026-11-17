@@ -1,1 +1,24 @@
 /* You can add global styles to this file, and also import other style files */
+
+.inspector-panel__scale-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.inspector-panel__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-panel__button:not(.inspector-panel__button--danger) {
+  background: rgba(74, 108, 247, 0.14);
+  border-color: rgba(74, 108, 247, 0.4);
+  color: #dbe4ff;
+}
+
+.inspector-panel__button:not(.inspector-panel__button--danger):hover {
+  background: rgba(74, 108, 247, 0.26);
+  color: #ffffff;
+}

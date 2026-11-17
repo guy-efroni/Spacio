@@ -7,6 +7,7 @@
       </svg>
       <span class="app-header__title">Spacio</span>
     </div>
+    <app-workspace-nav class="app-header__nav"></app-workspace-nav>
     <div class="app-header__stats">
       <div class="app-header__stat">
         <span class="app-header__stat-value">{{ wallCount() }}</span>
@@ -44,10 +45,29 @@
           </button>
           @if (isCatalogOpen()) {
             <div class="app-floating-toolbar__catalog-popover">
-              <div class="app-floating-toolbar__catalog-title">Furniture</div>
-              @for (item of furnitureCatalog; track item.category) {
-                <button type="button" class="app-floating-toolbar__catalog-item" (click)="onSelectFurniture(item.category)">{{ item.label }}</button>
+              <div class="app-floating-toolbar__catalog-title">Furniture Catalog</div>
+              @if (isCatalogLoading()) {
+                <div class="app-floating-toolbar__catalog-hint">Loading blueprints…</div>
+              } @else if (catalogError()) {
+                <div class="app-floating-toolbar__catalog-hint app-floating-toolbar__catalog-hint--error">{{ catalogError() }}</div>
+              } @else {
+                @for (item of furnitureCatalog(); track item.id) {
+                  <button type="button" class="app-floating-toolbar__catalog-item" (click)="onSelectFurniture(item)">
+                    @if (item.thumbnailDataUrl) {
+                      <img class="app-floating-toolbar__catalog-thumb" [src]="item.thumbnailDataUrl" [alt]="item.name" />
+                    } @else {
+                      <span class="app-floating-toolbar__catalog-thumb app-floating-toolbar__catalog-thumb--empty"></span>
+                    }
+                    <span class="app-floating-toolbar__catalog-item-text">
+                      <span class="app-floating-toolbar__catalog-name">{{ item.name }}</span>
+                      <span class="app-floating-toolbar__catalog-category">{{ item.category }}</span>
+                    </span>
+                  </button>
+                } @empty {
+                  <div class="app-floating-toolbar__catalog-hint">No blueprints yet — craft one in the Craft Room.</div>
+                }
               }
+              <button type="button" class="app-floating-toolbar__catalog-craft" (click)="onOpenCraftRoom()">+ Craft new piece</button>
               <div class="app-floating-toolbar__catalog-hint">Click floor to place · R to rotate</div>
             </div>
           }

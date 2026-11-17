@@ -29,13 +29,13 @@ import {
   FURNITURE_GHOST_RENDER_ORDER,
   FURNITURE_ROTATION_STEP_RAD,
   FURNITURE_USER_DATA_TYPE,
-  IParametricFurniture,
+  IFurnitureBlueprint,
+  IPlacedFurniture,
   IRulerPoint,
   IWallMeshUserData,
   IWallSegment,
   POSITION_ATTRIBUTE_NAME,
   PRIMARY_POINTER_BUTTON,
-  ParametricFurnitureCategory,
   ROOM_FLOOR_MESH_NAME,
   ROOM_FLOORS_GROUP_NAME,
   RULER_BADGE_HEIGHT_OFFSET,
@@ -107,6 +107,7 @@ import {
   WALL_USER_DATA_TYPE,
   WEBGL_LOSE_CONTEXT_EXTENSION,
   ViewportToolMode,
+  getBlueprintBounds,
 } from '@spacio/shared-types';
 import { FloorplanService } from '../../core/services/floorplan.service';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
@@ -207,7 +208,7 @@ export class ViewportComponent implements OnDestroy {
   protected readonly rulerBadgePosition: WritableSignal<IRulerPoint | null> = signal<IRulerPoint | null>(null);
   private _rulerPhase: RulerPhase = RulerPhase.Idle;
 
-  private readonly _pendingFurnitureCategory: WritableSignal<ParametricFurnitureCategory | null> = signal<ParametricFurnitureCategory | null>(null);
+  private readonly _pendingBlueprint: WritableSignal<IFurnitureBlueprint | null> = signal<IFurnitureBlueprint | null>(null);
   private _pendingFurnitureRotationY: number = 0;
   private _furnitureGhost: IFurnitureGhost | null = null;
 
@@ -241,7 +242,7 @@ export class ViewportComponent implements OnDestroy {
     });
 
     effect((): void => {
-      const furniture: readonly IParametricFurniture[] = this.floorplanService.furniture();
+      const furniture: readonly IPlacedFurniture[] = this.floorplanService.furniture();
       const selectedId: string | null = this.floorplanService.selectedFurnitureId();
       if (!this._scene) return;
       this._syncFurniture(furniture, selectedId);
@@ -271,9 +272,9 @@ export class ViewportComponent implements OnDestroy {
     }
   }
 
-  public onStartFurniturePlacement(category: ParametricFurnitureCategory): void {
+  public onStartFurniturePlacement(blueprint: IFurnitureBlueprint): void {
     this._removeFurnitureGhost();
-    this._pendingFurnitureCategory.set(category);
+    this._pendingBlueprint.set(blueprint);
     this._pendingFurnitureRotationY = 0;
     this._setToolMode(ViewportToolMode.PlaceFurniture);
     this._updateFurnitureGhostAtCursor(null);
@@ -362,7 +363,7 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _cancelFurniturePlacementInternal(): void {
-    this._pendingFurnitureCategory.set(null);
+    this._pendingBlueprint.set(null);
     this._removeFurnitureGhost();
   }
 
@@ -609,20 +610,19 @@ export class ViewportComponent implements OnDestroy {
 
   private _handleFurniturePlacementPointerDown(event: PointerEvent): void {
     event.stopPropagation();
-    const category: ParametricFurnitureCategory | null = this._pendingFurnitureCategory();
-    if (!category) return;
+    const blueprint: IFurnitureBlueprint | null = this._pendingBlueprint();
+    if (!blueprint) return;
     const point: IFloorPlacementPoint | null = this._getFurniturePlacementPoint(event);
     if (!point) return;
 
-    const item: IParametricFurniture = this.floorplanService.createDefaultFurniture(category, { x: point.x, y: 0, z: point.y });
-    item.rotationY = this._pendingFurnitureRotationY;
+    const item: IPlacedFurniture = this.floorplanService.createFurnitureFromBlueprint(blueprint, { x: point.x, y: 0, z: point.y });
+    item.rotation.y = THREE.MathUtils.radToDeg(this._pendingFurnitureRotationY);
 
-    // Commit placement before clearing preview/tool state so the item persists in state and scene sync.
     this.floorplanService.addFurniture(item);
     this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
 
     this._removeFurnitureGhost();
-    this._pendingFurnitureCategory.set(null);
+    this._pendingBlueprint.set(null);
     this._setToolMode(ViewportToolMode.View);
   }
 
@@ -1074,7 +1074,7 @@ export class ViewportComponent implements OnDestroy {
     this._wallsGroup.clear();
   }
 
-  private _syncFurniture(furniture: ReadonlyArray<IParametricFurniture>, selectedId: string | null): void {
+  private _syncFurniture(furniture: ReadonlyArray<IPlacedFurniture>, selectedId: string | null): void {
     if (!this._furnitureGroup) return;
     this._disposeFurnitureSelectionOutlines();
     for (const [, instance] of this._furnitureInstances.entries()) {
@@ -1087,7 +1087,6 @@ export class ViewportComponent implements OnDestroy {
     for (const item of furniture) {
       const generated: IGeneratedFurniture = buildParametricFurniture(item);
       generated.group.position.set(item.position.x, this._getFurniturePlacementY(), item.position.z);
-      generated.group.rotation.y = item.rotationY;
       generated.group.visible = true;
       generated.group.renderOrder = 1;
       this._furnitureGroup.add(generated.group);
@@ -1121,8 +1120,8 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _updateFurnitureGhostAtCursor(point: IFloorPlacementPoint | null): void {
-    const category: ParametricFurnitureCategory | null = this._pendingFurnitureCategory();
-    if (!category || !this._scene) {
+    const blueprint: IFurnitureBlueprint | null = this._pendingBlueprint();
+    if (!blueprint || !this._scene) {
       this._removeFurnitureGhost();
       return;
     }
@@ -1130,20 +1129,22 @@ export class ViewportComponent implements OnDestroy {
     if (!this._furnitureGhost) {
       const posX: number = point?.x ?? 0;
       const posZ: number = point?.y ?? 0;
-      const temp: IParametricFurniture = this.floorplanService.createDefaultFurniture(category, { x: posX, y: 0, z: posZ });
-      temp.rotationY = this._pendingFurnitureRotationY;
+      const temp: IPlacedFurniture = this.floorplanService.createFurnitureFromBlueprint(blueprint, { x: posX, y: 0, z: posZ });
+      temp.rotation.y = THREE.MathUtils.radToDeg(this._pendingFurnitureRotationY);
       const generated: IGeneratedFurniture = buildParametricFurniture(temp);
       const clonedMaterials: THREE.MeshStandardMaterial[] = this._applyGhostMaterials(generated);
-      const footprint: IFurnitureFootprint = this._createFurnitureFootprint(temp.dimensions.width, temp.dimensions.depth);
+      const bounds: { width: number; height: number; depth: number } = getBlueprintBounds(temp.parts);
+      const footprint: IFurnitureFootprint = this._createFurnitureFootprint(bounds.width, bounds.depth);
       const baseY: number = generated.group.position.y;
       const placementY: number = point?.placementY ?? this._getFurniturePlacementY();
+      const ghostRotation: number = this._pendingFurnitureRotationY;
 
       generated.group.position.set(posX, placementY + baseY, posZ);
-      generated.group.rotation.y = this._pendingFurnitureRotationY;
+      generated.group.rotation.y = ghostRotation;
       generated.group.renderOrder = FURNITURE_GHOST_RENDER_ORDER;
       generated.group.visible = true;
       footprint.group.position.set(posX, this._floorTopY, posZ);
-      footprint.group.rotation.y = this._pendingFurnitureRotationY;
+      footprint.group.rotation.y = ghostRotation;
 
       this._furnitureGhost = {
         generated,

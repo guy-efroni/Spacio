@@ -1,0 +1,35 @@
+.workspace-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #27272a;
+  border-radius: 10px;
+  background: #18181b;
+}
+
+.workspace-nav__link {
+  padding: 7px 14px;
+  border-radius: 7px;
+  color: #a1a1aa;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: #fafafa;
+    background: #27272a;
+  }
+
+  &--active {
+    color: #ffffff;
+    background: linear-gradient(135deg, #4a6cf7 0%, #3b5bd9 100%);
+    box-shadow: 0 2px 8px rgba(74, 108, 247, 0.35);
+
+    &:hover {
+      background: linear-gradient(135deg, #5b7cff 0%, #4a6cf7 100%);
+    }
+  }
+}

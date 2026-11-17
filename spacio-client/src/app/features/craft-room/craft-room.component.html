@@ -1,0 +1,171 @@
+<div class="craft-layout">
+  <header class="craft-header">
+    <div class="craft-header__brand">
+      <svg class="craft-header__logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+      <span class="craft-header__title">Spacio</span>
+      <span class="craft-header__mode">Craft Room</span>
+    </div>
+    <app-workspace-nav></app-workspace-nav>
+    <div class="craft-header__spacer"></div>
+  </header>
+
+  <main class="craft-main">
+    <aside class="craft-panel craft-panel--left">
+      <div class="craft-panel__section">
+        <label class="craft-panel__label" for="preset-select">Start from Preset</label>
+        <select id="preset-select" class="craft-panel__select" (change)="onSelectPreset($event)">
+          <option value="blank">Blank Piece</option>
+          @for (blueprint of blueprints(); track blueprint.id) {
+            <option [value]="blueprint.id">{{ blueprint.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="craft-panel__section">
+        <span class="craft-panel__label">Add Part</span>
+        <div class="craft-panel__shape-grid">
+          @for (shape of partShapes; track shape) {
+            <button type="button" class="craft-panel__shape-button" (click)="onAddPart(shape)">+ {{ shape }}</button>
+          }
+        </div>
+      </div>
+
+      <div class="craft-panel__section craft-panel__section--grow">
+        <div class="craft-panel__section-header">
+          <span class="craft-panel__label">Parts ({{ draft().parts.length }})</span>
+        </div>
+        @if (draft().parts.length === 0) {
+          <p class="craft-panel__empty">No parts yet. Add a shape or start from a preset.</p>
+        } @else {
+          <div class="craft-panel__parts">
+            @for (part of draft().parts; track part.id) {
+              <div class="craft-part-row" [class.craft-part-row--active]="selectedPartId() === part.id">
+                <button type="button" class="craft-part-row__select" (click)="onSelectPart(part.id)">
+                  <span class="craft-part-row__shape">{{ part.shape }}</span>
+                  <span class="craft-part-row__name">{{ part.name }}</span>
+                </button>
+                <button type="button" class="craft-part-row__delete" (click)="onDeletePart(part.id)" title="Delete part" aria-label="Delete part">×</button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="craft-panel__section">
+        <span class="craft-panel__label">Duplicate Selected</span>
+        <div class="craft-panel__mirror-row">
+          <label><input type="checkbox" [checked]="mirrorX()" (change)="onToggleMirror('x')" /> Mirror X</label>
+          <label><input type="checkbox" [checked]="mirrorZ()" (change)="onToggleMirror('z')" /> Mirror Z</label>
+        </div>
+        <button type="button" class="craft-panel__action" [disabled]="!selectedPart()" (click)="onDuplicatePart()">Duplicate Part</button>
+      </div>
+    </aside>
+
+    <section class="craft-stage-host">
+      <div class="craft-stage"></div>
+      <div class="craft-stage__hint">Drag to orbit · Scroll to zoom · Click a part to select</div>
+    </section>
+
+    <aside class="craft-panel craft-panel--right">
+      <div class="craft-panel__section">
+        <span class="craft-panel__label">Part Inspector</span>
+        @if (selectedPart(); as part) {
+          <label class="craft-field"><span>Name</span>
+            <input type="text" class="craft-field__input" [value]="part.name" (input)="onPartNameChange($event)" />
+          </label>
+          <div class="craft-field__badge">Shape: {{ part.shape }}</div>
+
+          <div class="craft-field__group-label">Dimensions (m)</div>
+          <div class="craft-field__grid">
+            <label class="craft-field"><span>Width</span>
+              <input type="number" step="0.01" class="craft-field__input" [value]="formatNumber(part.dimensions.width)" (change)="onPartDimensionChange('width', $event)" />
+            </label>
+            <label class="craft-field"><span>Height</span>
+              <input type="number" step="0.01" class="craft-field__input" [value]="formatNumber(part.dimensions.height)" (change)="onPartDimensionChange('height', $event)" />
+            </label>
+            <label class="craft-field"><span>Depth</span>
+              <input type="number" step="0.01" class="craft-field__input" [value]="formatNumber(part.dimensions.depth)" (change)="onPartDimensionChange('depth', $event)" />
+            </label>
+          </div>
+
+          <div class="craft-field__group-label">Position (m)</div>
+          <div class="craft-field__grid">
+            <label class="craft-field"><span>X</span>
+              <input type="number" step="0.01" class="craft-field__input" [value]="formatNumber(part.position.x)" (change)="onPartPositionChange('x', $event)" />
+            </label>
+            <label class="craft-field"><span>Y</span>
+              <input type="number" step="0.01" class="craft-field__input" [value]="formatNumber(part.position.y)" (change)="onPartPositionChange('y', $event)" />
+            </label>
+            <label class="craft-field"><span>Z</span>
+              <input type="number" step="0.01" class="craft-field__input" [value]="formatNumber(part.position.z)" (change)="onPartPositionChange('z', $event)" />
+            </label>
+          </div>
+
+          <div class="craft-field__group-label">Rotation (°)</div>
+          <div class="craft-field__grid">
+            <label class="craft-field"><span>X</span>
+              <input type="number" step="15" class="craft-field__input" [value]="formatNumber(part.rotation.x)" (change)="onPartRotationChange('x', $event)" />
+            </label>
+            <label class="craft-field"><span>Y</span>
+              <input type="number" step="15" class="craft-field__input" [value]="formatNumber(part.rotation.y)" (change)="onPartRotationChange('y', $event)" />
+            </label>
+            <label class="craft-field"><span>Z</span>
+              <input type="number" step="15" class="craft-field__input" [value]="formatNumber(part.rotation.z)" (change)="onPartRotationChange('z', $event)" />
+            </label>
+          </div>
+
+          <label class="craft-field"><span>Material Slot</span>
+            <select class="craft-field__input" [value]="part.materialSlot" (change)="onPartMaterialSlotChange($event)">
+              @for (entry of materialEntries(); track entry.key) {
+                <option [value]="entry.key">{{ entry.slot.label }}</option>
+              }
+            </select>
+          </label>
+        } @else {
+          <p class="craft-panel__empty">Select a part in the list or click it in the 3D stage.</p>
+        }
+      </div>
+
+      <div class="craft-panel__section craft-panel__section--grow">
+        <div class="craft-panel__section-header">
+          <span class="craft-panel__label">Material Slots</span>
+          <button type="button" class="craft-panel__mini" (click)="onAddMaterialSlot()">+ Add</button>
+        </div>
+        @for (entry of materialEntries(); track entry.key) {
+          <div class="craft-material">
+            <div class="craft-material__header">
+              <input type="text" class="craft-material__label" [value]="entry.slot.label" (input)="onMaterialLabelChange(entry.key, $event)" />
+              <button type="button" class="craft-material__delete" (click)="onRemoveMaterialSlot(entry.key)" title="Remove material slot" aria-label="Remove material slot">×</button>
+            </div>
+            <div class="craft-material__controls">
+              <input type="color" class="craft-material__color" [value]="entry.slot.color" (input)="onMaterialColorChange(entry.key, $event)" />
+              <select class="craft-material__finish" [value]="entry.slot.finish" (change)="onMaterialFinishChange(entry.key, $event)">
+                @for (finish of finishOptions; track finish) {
+                  <option [value]="finish">{{ finish }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+      </div>
+    </aside>
+  </main>
+
+  <footer class="craft-savebar">
+    <label class="craft-savebar__field"><span>Furniture Name</span>
+      <input type="text" class="craft-savebar__input" [value]="blueprintName()" (input)="onBlueprintNameChange($event)" placeholder="e.g. Lounge Chair" />
+    </label>
+    <label class="craft-savebar__field"><span>Category</span>
+      <select class="craft-savebar__input" [value]="blueprintCategory()" (change)="onBlueprintCategoryChange($event)">
+        @for (category of categoryOptions; track category) {
+          <option [value]="category">{{ category }}</option>
+        }
+      </select>
+    </label>
+    <button type="button" class="craft-savebar__save" [disabled]="isSaving()" (click)="onSave()">{{ isSaving() ? 'Saving…' : 'Save to Catalog' }}</button>
+    <span class="craft-savebar__status">{{ saveMessage() }}</span>
+  </footer>
+</div>

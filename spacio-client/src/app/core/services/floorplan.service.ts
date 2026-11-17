@@ -6,18 +6,18 @@ import {
   DEFAULT_WINDOW_ELEVATION,
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
-  INITIAL_SQUARE_ROOM,
+  IFurnitureBlueprint,
   IMaterialSlot,
-  IParametricFurniture,
+  INITIAL_SQUARE_ROOM,
+  IPlacedFurniture,
   IWallOpening,
   IWallSegment,
   MAX_OPENING_WIDTH,
   MIN_OPENING_WIDTH,
-  ParametricFurnitureCategory,
   WallOpeningType,
   createDefaultOpeningMaterials,
   createDefaultOpeningStyleOptions,
-  createDefaultParametricFurniture,
+  createPlacedFurnitureFromBlueprint,
 } from '@spacio/shared-types';
 import {
   OpeningGap,
@@ -42,7 +42,7 @@ type IMaterialSlotMap = Record<string, IMaterialSlot>;
 type IFloorplanSnapshot = {
   walls: IWallSegment[];
   openings: IWallOpening[];
-  furniture: IParametricFurniture[];
+  furniture: IPlacedFurniture[];
 };
 
 @Injectable({ providedIn: 'root' })
@@ -55,8 +55,8 @@ export class FloorplanService {
   private readonly _openings: WritableSignal<IWallOpening[]> = signal<IWallOpening[]>([]);
   public readonly openings: Signal<readonly IWallOpening[]> = this._openings.asReadonly();
 
-  private readonly _furniture: WritableSignal<IParametricFurniture[]> = signal<IParametricFurniture[]>([]);
-  public readonly furniture: Signal<readonly IParametricFurniture[]> = this._furniture.asReadonly();
+  private readonly _furniture: WritableSignal<IPlacedFurniture[]> = signal<IPlacedFurniture[]>([]);
+  public readonly furniture: Signal<readonly IPlacedFurniture[]> = this._furniture.asReadonly();
 
   private readonly _selectedWallId: WritableSignal<string | null> = signal<string | null>(null);
   public readonly selectedWallId: Signal<string | null> = this._selectedWallId.asReadonly();
@@ -288,42 +288,43 @@ export class FloorplanService {
     this._selectedFurnitureId.set(null);
   }
 
-  public addFurniture(item: IParametricFurniture): void {
+  public addFurniture(item: IPlacedFurniture): void {
     this._recordHistory();
-    this._furniture.update((items: IParametricFurniture[]) => [...items, this._cloneFurniture(item)]);
+    this._furniture.update((items: IPlacedFurniture[]) => [...items, this._cloneFurniture(item)]);
     this.selectFurniture(item.id);
   }
 
-  public updateFurniture(id: string, updates: Partial<Omit<IParametricFurniture, 'id' | 'category'>>): boolean {
-    const target: IParametricFurniture | undefined = this._furniture().find((item: IParametricFurniture) => item.id === id);
+  public updateFurniture(id: string, updates: Partial<Omit<IPlacedFurniture, 'id'>>): boolean {
+    const target: IPlacedFurniture | undefined = this._furniture().find((item: IPlacedFurniture) => item.id === id);
     if (!target) {
       return false;
     }
-    const next: IParametricFurniture = {
+    const next: IPlacedFurniture = {
       ...target,
       ...updates,
       position: updates.position ? { ...target.position, ...updates.position } : { ...target.position },
-      dimensions: updates.dimensions ? { ...target.dimensions, ...updates.dimensions } : { ...target.dimensions },
-      styleOptions: updates.styleOptions ? { ...target.styleOptions, ...updates.styleOptions } : { ...target.styleOptions },
+      rotation: updates.rotation ? { ...target.rotation, ...updates.rotation } : { ...target.rotation },
+      scale: updates.scale ? { ...target.scale, ...updates.scale } : { ...target.scale },
+      parts: updates.parts ? this._cloneParts(updates.parts) : this._cloneParts(target.parts),
       materials: updates.materials ? this._mergeMaterialSlots(target.materials, updates.materials) : this._cloneMaterials(target.materials),
     };
     if (JSON.stringify(next) === JSON.stringify(target)) {
       return false;
     }
     this._recordHistory();
-    this._furniture.update((items: IParametricFurniture[]) =>
-      items.map((item: IParametricFurniture) => (item.id === id ? next : item))
+    this._furniture.update((items: IPlacedFurniture[]) =>
+      items.map((item: IPlacedFurniture) => (item.id === id ? next : item))
     );
     return true;
   }
 
   public removeFurniture(id: string): void {
-    const exists: boolean = this._furniture().some((item: IParametricFurniture) => item.id === id);
+    const exists: boolean = this._furniture().some((item: IPlacedFurniture) => item.id === id);
     if (!exists) {
       return;
     }
     this._recordHistory();
-    this._furniture.update((items: IParametricFurniture[]) => items.filter((item: IParametricFurniture) => item.id !== id));
+    this._furniture.update((items: IPlacedFurniture[]) => items.filter((item: IPlacedFurniture) => item.id !== id));
     if (this._selectedFurnitureId() === id) {
       this._selectedFurnitureId.set(null);
     }
@@ -408,7 +409,7 @@ export class FloorplanService {
     if (selectedId === null) {
       return;
     }
-    const exists: boolean = this._furniture().some((item: IParametricFurniture) => item.id === selectedId);
+    const exists: boolean = this._furniture().some((item: IPlacedFurniture) => item.id === selectedId);
     if (!exists) {
       this._selectedFurnitureId.set(null);
     }
@@ -434,18 +435,28 @@ export class FloorplanService {
     };
   }
 
-  private _cloneFurnitureList(items: readonly IParametricFurniture[]): IParametricFurniture[] {
-    return items.map((item: IParametricFurniture) => this._cloneFurniture(item));
+  private _cloneFurnitureList(items: readonly IPlacedFurniture[]): IPlacedFurniture[] {
+    return items.map((item: IPlacedFurniture) => this._cloneFurniture(item));
   }
 
-  private _cloneFurniture(item: IParametricFurniture): IParametricFurniture {
+  private _cloneFurniture(item: IPlacedFurniture): IPlacedFurniture {
     return {
       ...item,
       position: { ...item.position },
-      dimensions: { ...item.dimensions },
-      styleOptions: { ...item.styleOptions },
+      rotation: { ...item.rotation },
+      scale: { ...item.scale },
+      parts: this._cloneParts(item.parts),
       materials: this._cloneMaterials(item.materials),
     };
+  }
+
+  private _cloneParts(parts: readonly import('@spacio/shared-types').IFurniturePart[]): import('@spacio/shared-types').IFurniturePart[] {
+    return parts.map((part: import('@spacio/shared-types').IFurniturePart) => ({
+      ...part,
+      dimensions: { ...part.dimensions },
+      position: { ...part.position },
+      rotation: { ...part.rotation },
+    }));
   }
 
   private _cloneMaterials(materials: IMaterialSlotMap): IMaterialSlotMap {
@@ -499,8 +510,8 @@ export class FloorplanService {
     return `furniture-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   }
 
-  public createDefaultFurniture(category: ParametricFurnitureCategory, position: { x: number; y: number; z: number }): IParametricFurniture {
-    return createDefaultParametricFurniture(category, this.generateFurnitureId(), position);
+  public createFurnitureFromBlueprint(blueprint: IFurnitureBlueprint, position: { x: number; y: number; z: number }): IPlacedFurniture {
+    return createPlacedFurnitureFromBlueprint(blueprint, this.generateFurnitureId(), position);
   }
 
   private _createDefaultRoom(): IWallSegment[] {
