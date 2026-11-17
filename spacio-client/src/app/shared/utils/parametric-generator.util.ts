@@ -16,10 +16,12 @@ export function createMaterialFromSlot(slot: IMaterialSlot): THREE.MeshStandardM
   const rawMetalness: number = Math.min(Math.max(slot.metalness, 0), 1);
   const effectiveMetalness: number = rawMetalness >= 0.8 ? rawMetalness : Math.min(rawMetalness, 0.2);
   const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(slot.color),
     roughness: clampedRoughness,
     metalness: effectiveMetalness,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
   });
-  material.color.setStyle(slot.color, THREE.SRGBColorSpace);
   material.name = slot.key;
   return material;
 }
@@ -238,6 +240,8 @@ export function buildParametricFurniture(item: IParametricFurniture): IGenerated
       std.side = THREE.FrontSide;
       std.visible = true;
       std.vertexColors = false;
+      std.emissive.setHex(0x000000);
+      std.emissiveIntensity = 0;
       std.needsUpdate = true;
     });
   });

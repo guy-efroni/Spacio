@@ -68,6 +68,7 @@ import {
   VIEWPORT_FLOOR_METALNESS,
   VIEWPORT_FLOOR_ROUGHNESS,
   VIEWPORT_FLOOR_SIZE,
+  VIEWPORT_FURNITURE_SELECTION_OUTLINE_COLOR,
   VIEWPORT_GHOST_WALL_COLOR,
   VIEWPORT_GHOST_WALL_OPACITY,
   VIEWPORT_GRID_COLOR_CENTER_LINE,
@@ -115,6 +116,7 @@ const DEFAULT_INITIAL_WIDTH: number = typeof window !== 'undefined' ? window.inn
 const DEFAULT_INITIAL_HEIGHT: number = typeof window !== 'undefined' ? window.innerHeight : 0;
 const FURNITURE_ROOT_GROUP_NAME: string = 'furniture-root';
 const FURNITURE_GHOST_FOOTPRINT_NAME: string = 'furniture-ghost-footprint';
+const FURNITURE_SELECTION_OUTLINE_NAME: string = 'furniture-selection-outline';
 
 interface ISceneObjectUserData {
   id?: string;
@@ -170,6 +172,7 @@ export class ViewportComponent implements OnDestroy {
   private readonly _floorsGroup: THREE.Group = new THREE.Group();
   private readonly _furnitureGroup: THREE.Group = new THREE.Group();
   private readonly _furnitureInstances: Map<string, IGeneratedFurniture> = new Map<string, IGeneratedFurniture>();
+  private readonly _furnitureSelectionOutlines: Map<string, THREE.BoxHelper> = new Map<string, THREE.BoxHelper>();
 
   private _floorMesh?: THREE.Mesh;
   private _floorMaterial?: THREE.MeshStandardMaterial;
@@ -232,15 +235,15 @@ export class ViewportComponent implements OnDestroy {
     });
 
     effect((): void => {
-      if (!this._scene) return;
       const polygon: readonly { x: number; y: number }[] | null = this.floorplanService.floorPolygon();
+      if (!this._scene) return;
       this._syncFloors(polygon);
     });
 
     effect((): void => {
-      if (!this._scene) return;
       const furniture: readonly IParametricFurniture[] = this.floorplanService.furniture();
       const selectedId: string | null = this.floorplanService.selectedFurnitureId();
+      if (!this._scene) return;
       this._syncFurniture(furniture, selectedId);
     });
 
@@ -393,7 +396,7 @@ export class ViewportComponent implements OnDestroy {
     this._renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     THREE.ColorManagement.enabled = true;
     this._renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this._renderer.toneMapping = THREE.NeutralToneMapping;
+    this._renderer.toneMapping = THREE.NoToneMapping;
     this._renderer.toneMappingExposure = VIEWPORT_TONE_MAPPING_EXPOSURE;
 
     this._scene = new THREE.Scene();
@@ -1073,6 +1076,7 @@ export class ViewportComponent implements OnDestroy {
 
   private _syncFurniture(furniture: ReadonlyArray<IParametricFurniture>, selectedId: string | null): void {
     if (!this._furnitureGroup) return;
+    this._disposeFurnitureSelectionOutlines();
     for (const [, instance] of this._furnitureInstances.entries()) {
       this._furnitureGroup.remove(instance.group);
       instance.dispose();
@@ -1086,29 +1090,34 @@ export class ViewportComponent implements OnDestroy {
       generated.group.rotation.y = item.rotationY;
       generated.group.visible = true;
       generated.group.renderOrder = 1;
-      this._applyFurnitureSelectionHighlight(generated.group, item.id === selectedId);
       this._furnitureGroup.add(generated.group);
       this._furnitureInstances.set(item.id, generated);
+      if (item.id === selectedId) {
+        this._addFurnitureSelectionOutline(generated.group, item.id);
+      }
     }
   }
 
-  private _applyFurnitureSelectionHighlight(group: THREE.Group, selected: boolean): void {
-    group.traverse((obj: THREE.Object3D): void => {
-      const mesh: THREE.Mesh = obj as THREE.Mesh;
-      const material: THREE.Material | THREE.Material[] | undefined = mesh.material as THREE.Material | THREE.Material[] | undefined;
-      if (!material) return;
-      const mats: THREE.Material[] = Array.isArray(material) ? material : [material];
-      mats.forEach((m: THREE.Material): void => {
-        const std = m as THREE.MeshStandardMaterial;
-        if (selected) {
-          std.emissive = new THREE.Color(0x2a4cff);
-          std.emissiveIntensity = 0.25;
-        } else {
-          std.emissive = new THREE.Color(0x000000);
-          std.emissiveIntensity = 0;
-        }
-      });
-    });
+  private _disposeFurnitureSelectionOutlines(): void {
+    for (const outline of this._furnitureSelectionOutlines.values()) {
+      this._furnitureGroup.remove(outline);
+      outline.geometry.dispose();
+      (outline.material as THREE.Material).dispose();
+    }
+    this._furnitureSelectionOutlines.clear();
+  }
+
+  private _addFurnitureSelectionOutline(group: THREE.Group, id: string): void {
+    group.updateMatrixWorld(true);
+    const outline: THREE.BoxHelper = new THREE.BoxHelper(group, VIEWPORT_FURNITURE_SELECTION_OUTLINE_COLOR);
+    const outlineMaterial: THREE.LineBasicMaterial = outline.material as THREE.LineBasicMaterial;
+    outlineMaterial.transparent = true;
+    outlineMaterial.opacity = 0.9;
+    outlineMaterial.depthWrite = false;
+    outline.name = FURNITURE_SELECTION_OUTLINE_NAME;
+    outline.renderOrder = 2;
+    this._furnitureGroup.add(outline);
+    this._furnitureSelectionOutlines.set(id, outline);
   }
 
   private _updateFurnitureGhostAtCursor(point: IFloorPlacementPoint | null): void {
@@ -1428,6 +1437,7 @@ export class ViewportComponent implements OnDestroy {
     this._removeFurnitureGhost();
 
     this._wallsGroup.clear();
+    this._disposeFurnitureSelectionOutlines();
     this._furnitureGroup.clear();
     this._floorsGroup.traverse((object: THREE.Object3D): void => {
       if (object instanceof THREE.Mesh) {
