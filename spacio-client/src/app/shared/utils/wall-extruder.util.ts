@@ -10,11 +10,7 @@ import {
   OPENING_FRAME_DEPTH,
   OPENING_FRAME_PREFIX,
   OPENING_FRAME_THICKNESS,
-  OPENING_GLASS_METALNESS,
-  OPENING_GLASS_OPACITY,
   OPENING_GLASS_PREFIX,
-  OPENING_GLASS_ROUGHNESS,
-  OPENING_GLASS_TRANSMISSION,
   OPENING_MESH_PREFIX,
   MIN_OPENING_GAP,
   MIN_OPENING_HEIGHT,
@@ -30,11 +26,13 @@ import {
   WALL_Z_FIGHT_OFFSET_EPSILON,
   WALL_Z_FIGHT_THICKNESS_OFFSET_RATIO,
   WallOpeningType,
+  createDefaultOpeningMaterials,
+  createDefaultOpeningStyleOptions,
 } from '@spacio/shared-types';
 
-const TRIM_THICKNESS = 0.06;
-const TRIM_HEIGHT = 0.15;
-const SPAN_EPSILON = 1e-6;
+const TRIM_THICKNESS: number = 0.06;
+const TRIM_HEIGHT: number = 0.15;
+const SPAN_EPSILON: number = 1e-6;
 
 type IOpeningSpan = {
   start: number;
@@ -372,7 +370,7 @@ export class WallExtruder {
     // Baseboard only where floor touches (skip under openings with elevation ~0)
     let cursor: number = 0;
     let idx: number = 0;
-    const addBase = (from: number, to: number): void => {
+    const addBase= (from: number, to: number): void => {
       const segLength: number = to - from;
       if (segLength <= 0.01) return;
       const centerAlong: number = (from + to) / 2;
@@ -401,7 +399,11 @@ export class WallExtruder {
     span: IOpeningSpan,
     dims: { renderedThickness: number; midX: number; midZ: number; angle: number; dirX: number; dirZ: number; startX: number; startZ: number }
   ): void {
-    const opening: IWallOpening = span.opening;
+    const opening: IWallOpening = {
+      ...span.opening,
+      materials: span.opening.materials ?? createDefaultOpeningMaterials(span.opening.type),
+      styleOptions: span.opening.styleOptions ?? createDefaultOpeningStyleOptions(span.opening.type),
+    };
     const width: number = span.end - span.start;
     const height: number = opening.height;
     const elevation: number = opening.elevation;
@@ -411,60 +413,73 @@ export class WallExtruder {
     const centerY: number = elevation + height / 2;
     const frameDepth: number = dims.renderedThickness + OPENING_FRAME_DEPTH;
 
+    const frameSlot = opening.materials['frame'];
     const frameMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8b7355,
-      roughness: 0.7,
-      metalness: 0.05,
+      color: frameSlot ? new THREE.Color(frameSlot.color) : 0x8b7355,
+      roughness: frameSlot?.roughness ?? 0.7,
+      metalness: frameSlot?.metalness ?? 0.05,
     });
 
     // Frame: top, bottom, left, right
-    const t = OPENING_FRAME_THICKNESS;
-    const top = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
+    const t: number = OPENING_FRAME_THICKNESS;
+    const top: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
     top.position.set(centerX, elevation + height + t / 2, centerZ);
     top.rotation.y = -dims.angle;
+    top.castShadow = true;
+    top.receiveShadow = true;
     top.name = `${OPENING_FRAME_PREFIX}-${opening.id}-top`;
     group.add(top);
 
-    const bottom = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
+    const bottom: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(width + t * 2, t, frameDepth), frameMaterial);
     bottom.position.set(centerX, elevation - t / 2, centerZ);
     bottom.rotation.y = -dims.angle;
+    bottom.castShadow = true;
+    bottom.receiveShadow = true;
     bottom.name = `${OPENING_FRAME_PREFIX}-${opening.id}-bottom`;
     group.add(bottom);
 
-    const left = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
+    const left: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
     const leftAlong: number = span.start - t / 2;
     left.position.set(dims.startX + dims.dirX * leftAlong, centerY, dims.startZ + dims.dirZ * leftAlong);
     left.rotation.y = -dims.angle;
+    left.castShadow = true;
+    left.receiveShadow = true;
     left.name = `${OPENING_FRAME_PREFIX}-${opening.id}-left`;
     group.add(left);
 
-    const right = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
+    const right: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(t, height, frameDepth), frameMaterial);
     const rightAlong: number = span.end + t / 2;
     right.position.set(dims.startX + dims.dirX * rightAlong, centerY, dims.startZ + dims.dirZ * rightAlong);
     right.rotation.y = -dims.angle;
+    right.castShadow = true;
+    right.receiveShadow = true;
     right.name = `${OPENING_FRAME_PREFIX}-${opening.id}-right`;
     group.add(right);
 
     if (opening.type === WallOpeningType.Window) {
+      const glassSlot= opening.materials['glass'];
+      const glassColor: THREE.Color = glassSlot ? new THREE.Color(glassSlot.color) : new THREE.Color(0xcfe8ff);
       const glassMaterial: THREE.MeshPhysicalMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0xcfe8ff,
+        color: glassColor,
         transparent: true,
-        opacity: OPENING_GLASS_OPACITY,
-        transmission: OPENING_GLASS_TRANSMISSION,
-        roughness: OPENING_GLASS_ROUGHNESS,
-        metalness: OPENING_GLASS_METALNESS,
+        opacity: Math.min(1, Math.max(0.05, 1 - (glassSlot?.roughness ?? 0.05))),
+        transmission: Math.min(1, Math.max(0, 1 - (glassSlot?.roughness ?? 0.05))),
+        roughness: glassSlot?.roughness ?? 0.05,
+        metalness: glassSlot?.metalness ?? 0.0,
         thickness: 0.02,
       });
       const glass: THREE.Mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.02), glassMaterial);
       glass.position.set(centerX, centerY, centerZ);
       glass.rotation.y = -dims.angle;
       glass.name = `${OPENING_GLASS_PREFIX}-${opening.id}`;
+      glass.userData = { id: opening.id, wallId: wall.id, type: 'opening' };
       group.add(glass);
     } else {
+      const panelSlot = opening.materials['panel'];
       const doorMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
-        color: 0x6b4f3a,
-        roughness: 0.8,
-        metalness: 0.02,
+        color: panelSlot ? new THREE.Color(panelSlot.color) : 0x6b4f3a,
+        roughness: panelSlot?.roughness ?? 0.8,
+        metalness: panelSlot?.metalness ?? 0.02,
       });
       const leafWidth: number = Math.max(width - DOOR_LEAF_GAP * 2, 0.1);
       const leafHeight: number = Math.max(height - DOOR_LEAF_GAP, 0.1);
@@ -474,6 +489,7 @@ export class WallExtruder {
       leaf.name = `${OPENING_DOOR_PREFIX}-${opening.id}`;
       leaf.castShadow = true;
       leaf.receiveShadow = true;
+      leaf.userData = { id: opening.id, wallId: wall.id, type: 'opening' };
       group.add(leaf);
     }
 

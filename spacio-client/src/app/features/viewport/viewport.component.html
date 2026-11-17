@@ -1,4 +1,4 @@
-<div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()" [class.viewport-container--ruler]="isRulerMode()"></div>
+﻿<div class="viewport-container" [class.viewport-container--drawing]="isDrawingMode()" [class.viewport-container--ruler]="isRulerMode()" [class.viewport-container--placing]="isPlacingFurnitureMode()"></div>
 @if (isDrawingMode() && ghostBadgePosition()) {
   <div
     class="ghost-length-badge"

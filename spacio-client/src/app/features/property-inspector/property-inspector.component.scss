@@ -634,4 +634,41 @@
 
 .inspector-panel__content::-webkit-scrollbar-thumb:hover {
   background: rgba(74, 108, 247, 0.5);
+}/* Appenditions for selects and material rows */
+.inspector-panel__select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 8px;
+  background: rgba(28, 28, 34, 0.8);
+  color: #fafafa;
+  font-size: 12px;
+}
+.inspector-panel__select--sm {
+  height: 30px;
+  min-width: 90px;
+}
+.inspector-panel__subsection {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.inspector-panel__material-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.inspector-panel__material-label {
+  font-size: 11px;
+  color: #d4d4d8;
+}
+.inspector-panel__color-input--sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
 }

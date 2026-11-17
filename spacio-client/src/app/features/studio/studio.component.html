@@ -1,4 +1,4 @@
-<div class="app-layout">
+﻿<div class="app-layout">
   <header class="app-header">
     <div class="app-header__brand">
       <svg class="app-header__logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7,7 +7,6 @@
       </svg>
       <span class="app-header__title">Spacio</span>
     </div>
-
     <div class="app-header__stats">
       <div class="app-header__stat">
         <span class="app-header__stat-value">{{ wallCount() }}</span>
@@ -19,148 +18,53 @@
         <span class="app-header__stat-label">m²</span>
       </div>
     </div>
-
     <div class="app-header__actions">
-      <button
-        type="button"
-        class="app-header__button"
-        (click)="_onResetRoom()"
-        title="Reset to default room"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-        </svg>
+      <button type="button" class="app-header__button" (click)="_onResetRoom()" title="Reset to default room">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
         <span>Reset</span>
       </button>
     </div>
   </header>
 
   <main class="app-main">
-    <div class="app-floating-toolbar" [class.app-floating-toolbar--active]="viewportComponent.isDrawingModePublic()">
+    <div class="app-floating-toolbar">
       <div class="app-floating-toolbar__group">
-        <button
-          type="button"
-          class="app-floating-toolbar__button"
-          [class.app-floating-toolbar__button--active]="!viewportComponent.isDrawingModePublic() && !viewportComponent.isRulerModePublic()"
-          (click)="viewportComponent.setToolMode(ViewportToolMode.View)"
-          title="Select / Orbit (V)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 11V6a2 2 0 00-2-2v0a2 2 0 00-2 2v0" />
-            <path d="M14 10V4a2 2 0 00-2-2v0a2 2 0 00-2 2v10" />
-            <path d="M10 10.5V6a2 2 0 00-2-2v0a2 2 0 00-2 2v8" />
-            <path d="M18 8a2 2 0 114 0v6a8 8 0 01-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 012.83-2.82L7 15" />
-          </svg>
+        <button type="button" class="app-floating-toolbar__button" [class.app-floating-toolbar__button--active]="!viewportComponent.isDrawingModePublic() && !viewportComponent.isRulerModePublic() && !viewportComponent.isPlacingFurnitureModePublic()" (click)="viewportComponent.setToolMode(ViewportToolMode.View)" title="Select / Orbit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 00-2-2v0a2 2 0 00-2 2v0" /><path d="M14 10V4a2 2 0 00-2-2v0a2 2 0 00-2 2v10" /><path d="M10 10.5V6a2 2 0 00-2-2v0a2 2 0 00-2 2v8" /><path d="M18 8a2 2 0 114 0v6a8 8 0 01-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 012.83-2.82L7 15" /></svg>
         </button>
-        <button
-          type="button"
-          class="app-floating-toolbar__button"
-          [class.app-floating-toolbar__button--active]="viewportComponent.isDrawingModePublic()"
-          (click)="viewportComponent.onAddInteriorWall()"
-          title="Add Wall (W)"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <!-- Top-down L-shaped wall corner in plan view -->
-            <path d="M3.5 20.5V3.5H19V7H7V20.5Z" />
-            <!-- Construction "+" badge marking the wall being drawn -->
-            <path d="M14.5 12v5" stroke-width="1.5" />
-            <path d="M12 14.5h5" stroke-width="1.5" />
-          </svg>
+        <button type="button" class="app-floating-toolbar__button" [class.app-floating-toolbar__button--active]="viewportComponent.isDrawingModePublic()" (click)="viewportComponent.onAddInteriorWall()" title="Add Wall">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20.5V3.5H19V7H7V20.5Z" /><path d="M14.5 12v5" stroke-width="1.5" /><path d="M12 14.5h5" stroke-width="1.5" /></svg>
         </button>
-        <button
-          type="button"
-          class="app-floating-toolbar__button"
-          [class.app-floating-toolbar__button--active]="viewportComponent.isRulerModePublic()"
-          (click)="viewportComponent.onToggleRuler()"
-          title="Ruler / Measure (M)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-            <rect x="10" y="3" width="4" height="18" rx="1.5" />
-            <path d="M14 6H17" />
-            <path d="M14 12H19" />
-            <path d="M14 18H17" />
-            <path d="M14 9H16" />
-            <path d="M14 15H16" />
-          </svg>
+        <button type="button" class="app-floating-toolbar__button" [class.app-floating-toolbar__button--active]="viewportComponent.isRulerModePublic()" (click)="viewportComponent.onToggleRuler()" title="Ruler / Measure">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="10" y="3" width="4" height="18" rx="1.5" /><path d="M14 6H17" /><path d="M14 12H19" /><path d="M14 18H17" /><path d="M14 9H16" /><path d="M14 15H16" /></svg>
         </button>
+        <div class="app-floating-toolbar__catalog">
+          <button type="button" class="app-floating-toolbar__button" [class.app-floating-toolbar__button--active]="viewportComponent.isPlacingFurnitureModePublic() || isCatalogOpen()" (click)="onToggleCatalog()" title="Furniture Catalog">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="8" height="8" rx="1.5" /><rect x="13" y="4" width="8" height="8" rx="1.5" /><rect x="3" y="14" width="8" height="6" rx="1.5" /><rect x="13" y="14" width="8" height="6" rx="1.5" /></svg>
+          </button>
+          @if (isCatalogOpen()) {
+            <div class="app-floating-toolbar__catalog-popover">
+              <div class="app-floating-toolbar__catalog-title">Furniture</div>
+              @for (item of furnitureCatalog; track item.category) {
+                <button type="button" class="app-floating-toolbar__catalog-item" (click)="onSelectFurniture(item.category)">{{ item.label }}</button>
+              }
+              <div class="app-floating-toolbar__catalog-hint">Click floor to place · R to rotate</div>
+            </div>
+          }
+        </div>
       </div>
 
       <div class="app-floating-toolbar__divider"></div>
 
       <div class="app-floating-toolbar__group">
-        <button
-          type="button"
-          class="app-floating-toolbar__button"
-          [disabled]="!floorplanService.canUndo()"
-          (click)="floorplanService.undo()"
-          title="Undo (Ctrl+Z)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 7v6h6" />
-            <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
-          </svg>
+        <button type="button" class="app-floating-toolbar__button" [disabled]="!floorplanService.canUndo()" (click)="floorplanService.undo()" title="Undo (Ctrl+Z)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" /></svg>
         </button>
-        <button
-          type="button"
-          class="app-floating-toolbar__button"
-          [disabled]="!floorplanService.canRedo()"
-          (click)="floorplanService.redo()"
-          title="Redo (Ctrl+Y)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 7v6h-6" />
-            <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" />
-          </svg>
+        <button type="button" class="app-floating-toolbar__button" [disabled]="!floorplanService.canRedo()" (click)="floorplanService.redo()" title="Redo (Ctrl+Y)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7" /></svg>
         </button>
-        <button
-          type="button"
-          class="app-floating-toolbar__button app-floating-toolbar__button--danger"
-          [disabled]="!floorplanService.selectedWallId()"
-          (click)="viewportComponent.onDeleteSelectedWall()"
-          title="Delete Selected Wall (Del)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-          </svg>
-        </button>
-      </div>
-
-      <div class="app-floating-toolbar__divider"></div>
-
-      <div class="app-floating-toolbar__group">
-        <button
-          type="button"
-          class="app-floating-toolbar__button"
-          title="Top View (1)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path d="M9 3v18" />
-            <path d="M15 3v18" />
-            <path d="M3 9h18" />
-            <path d="M3 15h18" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="app-floating-toolbar__button"
-          title="Perspective View (2)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5" />
-            <path d="M12 22V12" />
-            <path d="M22 15.5L12 9" />
-            <path d="M2 15.5L12 9" />
-          </svg>
+        <button type="button" class="app-floating-toolbar__button app-floating-toolbar__button--danger" [disabled]="!floorplanService.selectedWallId() && !floorplanService.selectedFurnitureId()" (click)="viewportComponent.onDeleteSelectedWall()" title="Delete Selected (Del)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
         </button>
       </div>
     </div>
@@ -169,7 +73,7 @@
       <app-viewport #viewportComponent></app-viewport>
     </section>
 
-    @if (floorplanService.selectedWallId()) {
+    @if (floorplanService.selectedWallId() || floorplanService.selectedFurnitureId()) {
       <aside class="app-inspector-panel">
         <app-property-inspector></app-property-inspector>
       </aside>
