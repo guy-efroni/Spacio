@@ -92,17 +92,17 @@ export function createFurniturePart(
   };
 }
 
-function buildDiningTableParts(): IFurniturePart[] {
+function buildTableParts(): IFurniturePart[] {
   const legs: IFurniturePart[] = [];
   const corners: ReadonlyArray<readonly [number, number]> = [
-    [-0.72, -0.37],
-    [0.72, -0.37],
-    [-0.72, 0.37],
-    [0.72, 0.37],
+    [-0.52, -0.27],
+    [0.52, -0.27],
+    [-0.52, 0.27],
+    [0.52, 0.27],
   ];
   corners.forEach((corner: readonly [number, number], index: number): void => {
     legs.push(
-      createFurniturePart(`dining-table-leg-${index + 1}`, `Leg ${index + 1}`, 'box', { width: 0.07, height: 0.69, depth: 0.07 }, {
+      createFurniturePart(`table-leg-${index + 1}`, `Leg ${index + 1}`, 'box', { width: 0.08, height: 0.69, depth: 0.08 }, {
         x: corner[0],
         y: 0.345,
         z: corner[1],
@@ -110,133 +110,80 @@ function buildDiningTableParts(): IFurniturePart[] {
     );
   });
   return [
-    createFurniturePart('dining-table-top', 'Tabletop', 'box', { width: 1.6, height: 0.06, depth: 0.9 }, { x: 0, y: 0.72, z: 0 }, 'top'),
+    createFurniturePart('table-top', 'Tabletop', 'box', { width: 1.2, height: 0.06, depth: 0.7 }, { x: 0, y: 0.72, z: 0 }, 'top'),
     ...legs,
   ];
 }
 
-function buildCoffeeTableParts(): IFurniturePart[] {
+function buildChairParts(): IFurniturePart[] {
   const legs: IFurniturePart[] = [];
   const corners: ReadonlyArray<readonly [number, number]> = [
-    [-0.54, -0.24],
-    [0.54, -0.24],
-    [-0.54, 0.24],
-    [0.54, 0.24],
+    [-0.19, -0.19],
+    [0.19, -0.19],
+    [-0.19, 0.19],
+    [0.19, 0.19],
   ];
   corners.forEach((corner: readonly [number, number], index: number): void => {
     legs.push(
-      createFurniturePart(`coffee-table-leg-${index + 1}`, `Leg ${index + 1}`, 'box', { width: 0.06, height: 0.35, depth: 0.06 }, {
+      createFurniturePart(`chair-leg-${index + 1}`, `Leg ${index + 1}`, 'box', { width: 0.05, height: 0.45, depth: 0.05 }, {
         x: corner[0],
-        y: 0.175,
+        y: 0.225,
         z: corner[1],
-      }, 'legs')
+      }, 'frame')
     );
   });
   return [
-    createFurniturePart('coffee-table-top', 'Tabletop', 'box', { width: 1.2, height: 0.05, depth: 0.6 }, { x: 0, y: 0.375, z: 0 }, 'top'),
-    createFurniturePart('coffee-table-shelf', 'Lower Shelf', 'box', { width: 1.05, height: 0.03, depth: 0.48 }, { x: 0, y: 0.12, z: 0 }, 'legs'),
+    createFurniturePart('chair-seat', 'Seat', 'box', { width: 0.46, height: 0.06, depth: 0.46 }, { x: 0, y: 0.45, z: 0 }, 'upholstery'),
+    createFurniturePart('chair-back', 'Backrest', 'box', { width: 0.46, height: 0.5, depth: 0.05 }, { x: 0, y: 0.73, z: -0.205 }, 'upholstery'),
     ...legs,
   ];
 }
 
-function buildSofaParts(): IFurniturePart[] {
+function buildShelfParts(): IFurniturePart[] {
   return [
-    createFurniturePart('sofa-base', 'Base', 'box', { width: 2.0, height: 0.35, depth: 0.9 }, { x: 0, y: 0.175, z: 0 }, 'base'),
-    createFurniturePart('sofa-back', 'Backrest', 'box', { width: 2.0, height: 0.5, depth: 0.16 }, { x: 0, y: 0.6, z: -0.37 }, 'upholstery'),
-    createFurniturePart('sofa-seat-left', 'Left Cushion', 'box', { width: 0.88, height: 0.12, depth: 0.68 }, { x: -0.45, y: 0.41, z: 0.06 }, 'upholstery'),
-    createFurniturePart('sofa-seat-right', 'Right Cushion', 'box', { width: 0.88, height: 0.12, depth: 0.68 }, { x: 0.45, y: 0.41, z: 0.06 }, 'upholstery'),
-    createFurniturePart('sofa-arm-left', 'Left Armrest', 'box', { width: 0.14, height: 0.42, depth: 0.9 }, { x: -0.93, y: 0.56, z: 0 }, 'upholstery'),
-    createFurniturePart('sofa-arm-right', 'Right Armrest', 'box', { width: 0.14, height: 0.42, depth: 0.9 }, { x: 0.93, y: 0.56, z: 0 }, 'upholstery'),
+    createFurniturePart('shelf-left', 'Left Panel', 'box', { width: 0.04, height: 1.4, depth: 0.32 }, { x: -0.48, y: 0.7, z: 0 }, 'body'),
+    createFurniturePart('shelf-right', 'Right Panel', 'box', { width: 0.04, height: 1.4, depth: 0.32 }, { x: 0.48, y: 0.7, z: 0 }, 'body'),
+    createFurniturePart('shelf-bottom', 'Bottom Panel', 'box', { width: 1.0, height: 0.04, depth: 0.32 }, { x: 0, y: 0.02, z: 0 }, 'body'),
+    createFurniturePart('shelf-top', 'Top Panel', 'box', { width: 1.0, height: 0.04, depth: 0.32 }, { x: 0, y: 1.38, z: 0 }, 'body'),
+    createFurniturePart('shelf-back', 'Back Panel', 'box', { width: 0.96, height: 1.36, depth: 0.02 }, { x: 0, y: 0.7, z: -0.15 }, 'body'),
+    createFurniturePart('shelf-level-1', 'Shelf 1', 'box', { width: 0.92, height: 0.03, depth: 0.3 }, { x: 0, y: 0.35, z: 0 }, 'shelves'),
+    createFurniturePart('shelf-level-2', 'Shelf 2', 'box', { width: 0.92, height: 0.03, depth: 0.3 }, { x: 0, y: 0.7, z: 0 }, 'shelves'),
+    createFurniturePart('shelf-level-3', 'Shelf 3', 'box', { width: 0.92, height: 0.03, depth: 0.3 }, { x: 0, y: 1.05, z: 0 }, 'shelves'),
   ];
-}
-
-function buildBedParts(): IFurniturePart[] {
-  return [
-    createFurniturePart('bed-frame', 'Frame', 'box', { width: 1.6, height: 0.3, depth: 2.0 }, { x: 0, y: 0.15, z: 0 }, 'frame'),
-    createFurniturePart('bed-mattress', 'Mattress', 'box', { width: 1.52, height: 0.22, depth: 1.92 }, { x: 0, y: 0.41, z: 0.04 }, 'upholstery'),
-    createFurniturePart('bed-headboard', 'Headboard', 'box', { width: 1.6, height: 0.9, depth: 0.08 }, { x: 0, y: 0.45, z: -1.04 }, 'frame'),
-    createFurniturePart('bed-pillow-left', 'Left Pillow', 'box', { width: 0.62, height: 0.12, depth: 0.34 }, { x: -0.37, y: 0.58, z: -0.7 }, 'upholstery'),
-    createFurniturePart('bed-pillow-right', 'Right Pillow', 'box', { width: 0.62, height: 0.12, depth: 0.34 }, { x: 0.37, y: 0.58, z: -0.7 }, 'upholstery'),
-  ];
-}
-
-function buildBookshelfParts(): IFurniturePart[] {
-  const parts: IFurniturePart[] = [
-    createFurniturePart('bookshelf-left', 'Left Panel', 'box', { width: 0.03, height: 1.8, depth: 0.4 }, { x: -0.485, y: 0.9, z: 0 }, 'body'),
-    createFurniturePart('bookshelf-right', 'Right Panel', 'box', { width: 0.03, height: 1.8, depth: 0.4 }, { x: 0.485, y: 0.9, z: 0 }, 'body'),
-    createFurniturePart('bookshelf-bottom', 'Bottom Panel', 'box', { width: 1.0, height: 0.03, depth: 0.4 }, { x: 0, y: 0.015, z: 0 }, 'body'),
-    createFurniturePart('bookshelf-top', 'Top Panel', 'box', { width: 1.0, height: 0.03, depth: 0.4 }, { x: 0, y: 1.785, z: 0 }, 'body'),
-    createFurniturePart('bookshelf-back', 'Back Panel', 'box', { width: 0.94, height: 1.74, depth: 0.02 }, { x: 0, y: 0.9, z: -0.19 }, 'body'),
-  ];
-  const shelfHeights: readonly number[] = [0.37, 0.72, 1.07, 1.42];
-  shelfHeights.forEach((height: number, index: number): void => {
-    parts.push(
-      createFurniturePart(`bookshelf-shelf-${index + 1}`, `Shelf ${index + 1}`, 'box', { width: 0.94, height: 0.03, depth: 0.36 }, {
-        x: 0,
-        y: height,
-        z: 0,
-      }, 'shelves')
-    );
-  });
-  return parts;
 }
 
 export const FURNITURE_PRESETS: readonly IFurnitureBlueprint[] = [
   {
-    id: 'preset-dining-table',
+    id: 'preset-table',
     userId: null,
-    name: 'Dining Table',
+    name: 'Table',
     category: 'tables',
     isPreset: true,
-    parts: buildDiningTableParts(),
+    parts: buildTableParts(),
     materials: {
       top: createFurnitureMaterialSlot('Top', '#8b5a2b', 'satin'),
       legs: createFurnitureMaterialSlot('Legs', '#2f2f35', 'satin'),
     },
   },
   {
-    id: 'preset-coffee-table',
+    id: 'preset-chair',
     userId: null,
-    name: 'Coffee Table',
-    category: 'tables',
-    isPreset: true,
-    parts: buildCoffeeTableParts(),
-    materials: {
-      top: createFurnitureMaterialSlot('Top', '#a9743d', 'satin'),
-      legs: createFurnitureMaterialSlot('Legs', '#2f2f35', 'satin'),
-    },
-  },
-  {
-    id: 'preset-sofa',
-    userId: null,
-    name: 'Sofa',
+    name: 'Chair',
     category: 'seating',
     isPreset: true,
-    parts: buildSofaParts(),
+    parts: buildChairParts(),
     materials: {
       upholstery: createFurnitureMaterialSlot('Upholstery', '#5b6b8a', 'matte'),
-      base: createFurnitureMaterialSlot('Base', '#3a3a40', 'satin'),
+      frame: createFurnitureMaterialSlot('Frame', '#2f2f35', 'satin'),
     },
   },
   {
-    id: 'preset-bed',
+    id: 'preset-shelf',
     userId: null,
-    name: 'Bed',
-    category: 'beds',
-    isPreset: true,
-    parts: buildBedParts(),
-    materials: {
-      frame: createFurnitureMaterialSlot('Frame', '#7a5230', 'satin'),
-      upholstery: createFurnitureMaterialSlot('Upholstery', '#e5e7eb', 'matte'),
-    },
-  },
-  {
-    id: 'preset-bookshelf',
-    userId: null,
-    name: 'Bookshelf',
+    name: 'Shelf',
     category: 'storage',
     isPreset: true,
-    parts: buildBookshelfParts(),
+    parts: buildShelfParts(),
     materials: {
       body: createFurnitureMaterialSlot('Body', '#d4d4d8', 'satin'),
       shelves: createFurnitureMaterialSlot('Shelves', '#a1a1aa', 'satin'),

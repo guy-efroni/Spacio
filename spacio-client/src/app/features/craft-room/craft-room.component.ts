@@ -5,6 +5,7 @@ import {
   OnDestroy,
   Signal,
   afterNextRender,
+  computed,
   effect,
   inject,
 } from '@angular/core';
@@ -59,6 +60,11 @@ export class CraftRoomComponent implements OnDestroy {
 
   public readonly selectedPart = this._workbench.selectedPart;
   public readonly materialEntries: Signal<readonly ICraftMaterialEntry[]> = this._workbench.materialEntries;
+  public readonly selectedMaterialEntry: Signal<ICraftMaterialEntry | null> = computed<ICraftMaterialEntry | null>((): ICraftMaterialEntry | null => {
+    const part = this._workbench.selectedPart();
+    if (!part) return null;
+    return this._workbench.materialEntries().find((entry: ICraftMaterialEntry): boolean => entry.key === part.materialSlot) ?? null;
+  });
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
