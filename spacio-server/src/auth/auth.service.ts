@@ -4,44 +4,53 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
+import { randomUUID } from 'node:crypto';
 import { compare, hash } from 'bcryptjs';
-import { Repository } from 'typeorm';
 import type { IAuthResponse, IUserProfile } from '@spacio/shared-types';
-import { UserEntity } from './entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import type { IJwtPayload } from './interfaces/authenticated-request.interface';
 
 const SALT_ROUNDS: number = 10;
 
+interface IStoredUser {
+  id: string;
+  email: string;
+  displayName: string;
+  passwordHash: string;
+}
+
 @Injectable()
 export class AuthService {
-  constructor(
-    @InjectRepository(UserEntity)
-    private readonly repository: Repository<UserEntity>,
-    private readonly jwtService: JwtService,
-  ) {}
+  private readonly _users: Map<string, IStoredUser> = new Map<
+    string,
+    IStoredUser
+  >();
+
+  constructor(private readonly jwtService: JwtService) {}
 
   public async register(dto: RegisterDto): Promise<IAuthResponse> {
     const email: string = this._normalizeEmail(dto.email);
-    const existing: UserEntity | null = await this.repository.findOne({
-      where: { email },
-    });
-    if (existing) throw new ConflictException('Email is already registered');
+    for (const user of this._users.values()) {
+      if (user.email === email)
+        throw new ConflictException('Email is already registered');
+    }
 
-    const user: UserEntity = this.repository.create({
+    const user: IStoredUser = {
+      id: randomUUID(),
       email,
       displayName: dto.displayName.trim(),
       passwordHash: await hash(dto.password, SALT_ROUNDS),
-    });
-    return this._buildResponse(await this.repository.save(user));
+    };
+    this._users.set(user.id, user);
+    return this._buildResponse(user);
   }
 
   public async login(dto: LoginDto): Promise<IAuthResponse> {
-    const user: UserEntity | null = await this.repository.findOne({
-      where: { email: this._normalizeEmail(dto.email) },
-    });
+    const email: string = this._normalizeEmail(dto.email);
+    const user: IStoredUser | undefined = [...this._users.values()].find(
+      (item: IStoredUser): boolean => item.email === email,
+    );
     if (!user || !(await compare(dto.password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -56,14 +65,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired token');
     }
 
-    const user: UserEntity | null = await this.repository.findOne({
-      where: { id: payload.sub },
-    });
+    const user: IStoredUser | undefined = this._users.get(payload.sub);
     if (!user) throw new UnauthorizedException('User no longer exists');
     return this._toProfile(user);
   }
 
-  private _buildResponse(user: UserEntity): IAuthResponse {
+  private _buildResponse(user: IStoredUser): IAuthResponse {
     const profile: IUserProfile = this._toProfile(user);
     const payload: IJwtPayload = { sub: user.id, email: user.email };
     return {
@@ -72,7 +79,7 @@ export class AuthService {
     };
   }
 
-  private _toProfile(user: UserEntity): IUserProfile {
+  private _toProfile(user: IStoredUser): IUserProfile {
     return {
       id: user.id,
       email: user.email,

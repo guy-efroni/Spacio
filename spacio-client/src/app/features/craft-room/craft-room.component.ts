@@ -4,19 +4,31 @@ import {
   NgZone,
   OnDestroy,
   Signal,
+  WritableSignal,
   afterNextRender,
   computed,
   effect,
   inject,
+  signal,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { FURNITURE_PART_ID_USER_DATA_KEY, IFurnitureBlueprint, HtmlTag, KeyboardKey, TMaterialFinish, TPartShape } from '@spacio/shared-types';
+import {
+  FURNITURE_PART_ID_USER_DATA_KEY,
+  HtmlTag,
+  IFurnitureBlueprint,
+  IFurniturePoint2D,
+  IFurniturePoint3D,
+  KeyboardKey,
+  TMaterialFinish,
+  TPartShape,
+} from '@spacio/shared-types';
 import { CraftWorkbenchService, ICraftMaterialEntry } from '../../core/services/craft-workbench.service';
 import { FurnitureCatalogService } from '../../core/services/furniture-catalog.service';
 import { WorkspaceNavComponent } from '../../shared/components/workspace-nav.component';
 import { buildFurnitureMesh, disposeFurnitureGroup } from '../../core/3d/furniture-mesh.builder';
+import { ShapeStudioComponent } from './shape-studio/shape-studio.component';
 
 const STAGE_BACKGROUND: number = 0x141418;
 const STAGE_FLOOR_COLOR: number = 0x1b1b22;
@@ -39,11 +51,13 @@ const EDIT_QUERY_PARAM: string = 'edit';
 const THUMBNAIL_SIZE: number = 256;
 const THUMBNAIL_MIME_TYPE: string = 'image/jpeg';
 const THUMBNAIL_QUALITY: number = 0.82;
+const SHAPE_STUDIO_SHAPES: readonly TPartShape[] = ['extrude-2d', 'lathe-360', 'tube-path'];
+const BEVEL_SHAPES: readonly TPartShape[] = ['rounded-box', 'extrude-2d'];
 
 @Component({
   selector: 'app-craft-room',
   standalone: true,
-  imports: [WorkspaceNavComponent],
+  imports: [WorkspaceNavComponent, ShapeStudioComponent],
   providers: [CraftWorkbenchService],
   templateUrl: './craft-room.component.html',
   styleUrl: './craft-room.component.scss',
@@ -75,6 +89,17 @@ export class CraftRoomComponent implements OnDestroy {
     const part = this._workbench.selectedPart();
     if (!part) return null;
     return this._workbench.materialEntries().find((entry: ICraftMaterialEntry): boolean => entry.key === part.materialSlot) ?? null;
+  });
+
+  private readonly _shapeStudioOpen: WritableSignal<boolean> = signal<boolean>(false);
+  public readonly shapeStudioOpen: Signal<boolean> = this._shapeStudioOpen.asReadonly();
+  public readonly canOpenShapeStudio: Signal<boolean> = computed<boolean>((): boolean => {
+    const shape: TPartShape | undefined = this._workbench.selectedPart()?.shape;
+    return shape !== undefined && SHAPE_STUDIO_SHAPES.includes(shape);
+  });
+  public readonly showBevelRadius: Signal<boolean> = computed<boolean>((): boolean => {
+    const shape: TPartShape | undefined = this._workbench.selectedPart()?.shape;
+    return shape !== undefined && BEVEL_SHAPES.includes(shape);
   });
 
   private _renderer?: THREE.WebGLRenderer;
@@ -139,10 +164,12 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   public onSelectPreset(event: Event): void {
+    this._shapeStudioOpen.set(false);
     this._workbench.selectBlueprint(this._valueFromEvent(event));
   }
 
   public onAddPart(shape: TPartShape): void {
+    this._shapeStudioOpen.set(false);
     this._workbench.addPart(shape);
   }
 
@@ -159,6 +186,7 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   public onSelectPart(id: string): void {
+    this._shapeStudioOpen.set(false);
     this._workbench.selectPart(id);
   }
 
@@ -168,6 +196,34 @@ export class CraftRoomComponent implements OnDestroy {
 
   public onPartDimensionChange(field: 'width' | 'height' | 'depth', event: Event): void {
     this._workbench.updatePartDimension(field, this._numberFromEvent(event));
+  }
+
+  public onPartBevelRadiusChange(event: Event): void {
+    this._workbench.updatePartBevelRadius(this._numberFromEvent(event));
+  }
+
+  public onOpenShapeStudio(): void {
+    if (this.canOpenShapeStudio()) this._shapeStudioOpen.set(true);
+  }
+
+  public onCloseShapeStudio(): void {
+    this._shapeStudioOpen.set(false);
+  }
+
+  public onPoints2DChange(points: readonly IFurniturePoint2D[]): void {
+    this._workbench.updatePartPoints2D(points);
+  }
+
+  public onPathPoints3DChange(points: readonly IFurniturePoint3D[]): void {
+    this._workbench.updatePartPathPoints3D(points);
+  }
+
+  public onTubeRadiusChange(value: number): void {
+    this._workbench.updatePartTubeRadius(value);
+  }
+
+  public onBevelRadiusChange(value: number): void {
+    this._workbench.updatePartBevelRadius(value);
   }
 
   public onPartPositionChange(axis: 'x' | 'y' | 'z', event: Event): void {
@@ -391,10 +447,12 @@ export class CraftRoomComponent implements OnDestroy {
     for (const intersection of intersections) {
       const partId: string | undefined = intersection.object.userData[FURNITURE_PART_ID_USER_DATA_KEY] as string | undefined;
       if (partId) {
+        this._shapeStudioOpen.set(false);
         this._workbench.selectPart(partId);
         return;
       }
     }
+    this._shapeStudioOpen.set(false);
     this._workbench.clearPartSelection();
   }
 

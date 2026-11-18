@@ -1,7 +1,13 @@
 ﻿import { IEulerRotation } from '../geometry/euler-rotation.interface';
 import { IVector3D } from '../geometry/vector3d.interface';
 import { IFurnitureBlueprint, TFurnitureCategory } from '../furniture/furniture-blueprint.interface';
-import { IFurniturePart, TPartShape } from '../furniture/furniture-part.interface';
+import {
+  IFurniturePart,
+  IFurniturePartShapeParameters,
+  IFurniturePoint2D,
+  IFurniturePoint3D,
+  TPartShape,
+} from '../furniture/furniture-part.interface';
 import { IMaterialSlot, TMaterialFinish } from '../furniture/material-slot.interface';
 import { IParametricFurniture, ParametricFurnitureCategory } from '../furniture/parametric-furniture.interface';
 import { IPlacedFurniture } from '../furniture/placed-furniture.interface';
@@ -35,21 +41,142 @@ export const FURNITURE_FINISH_PBR: Record<TMaterialFinish, { roughness: number; 
   satin: { roughness: 0.45, metalness: 0.05 },
   gloss: { roughness: 0.15, metalness: 0.05 },
   metallic: { roughness: 0.25, metalness: 0.85 },
+  glass: { roughness: 0.05, metalness: 0 },
 };
+
+export const GLASS_FINISH_SETTINGS = {
+  transmission: 0.9,
+  opacity: 0.35,
+  roughness: 0.05,
+  ior: 1.5,
+} as const;
 
 export const MATERIAL_FINISH_PRESETS: readonly { name: string; roughness: number; metalness: number }[] = [
   { name: 'Matte', roughness: 0.9, metalness: 0.0 },
   { name: 'Satin', roughness: 0.45, metalness: 0.05 },
   { name: 'Glossy', roughness: 0.15, metalness: 0.05 },
   { name: 'Metallic', roughness: 0.25, metalness: 0.85 },
+  { name: 'Glass', roughness: 0.05, metalness: 0.0 },
 ] as const;
 
-export const MATERIAL_FINISH_OPTIONS: readonly TMaterialFinish[] = ['matte', 'satin', 'gloss', 'metallic'];
+export const MATERIAL_FINISH_OPTIONS: readonly TMaterialFinish[] = ['matte', 'satin', 'gloss', 'metallic', 'glass'];
 export const FURNITURE_CATEGORY_OPTIONS: readonly TFurnitureCategory[] = ['tables', 'seating', 'beds', 'storage', 'decor'];
-export const PART_SHAPE_OPTIONS: readonly TPartShape[] = ['box', 'cylinder', 'sphere', 'capsule'];
+export const PART_SHAPE_OPTIONS: readonly TPartShape[] = [
+  'box',
+  'rounded-box',
+  'cylinder',
+  'sphere',
+  'capsule',
+  'cone',
+  'torus',
+  'extrude-2d',
+  'lathe-360',
+  'tube-path',
+];
 
 export const DEFAULT_FURNITURE_SCALE: IVector3D = { x: 1, y: 1, z: 1 };
 export const DEFAULT_FURNITURE_ROTATION: IEulerRotation = { x: 0, y: 0, z: 0 };
+
+export const DEFAULT_BEVEL_RADIUS: number = 0.02;
+export const DEFAULT_TUBE_RADIUS: number = 0.02;
+
+export const DEFAULT_EXTRUDE_POINTS: readonly IFurniturePoint2D[] = [
+  { x: -0.5, y: -0.3 },
+  { x: 0.5, y: -0.3 },
+  { x: 0.5, y: 0.3 },
+  { x: -0.5, y: 0.3 },
+];
+
+export const DEFAULT_LATHE_POINTS: readonly IFurniturePoint2D[] = [
+  { x: 0, y: -0.5 },
+  { x: 0.14, y: -0.5 },
+  { x: 0.12, y: -0.35, smooth: true },
+  { x: 0.08, y: -0.1 },
+  { x: 0.1, y: 0.15, smooth: true },
+  { x: 0.16, y: 0.35 },
+  { x: 0.2, y: 0.5 },
+  { x: 0, y: 0.5 },
+];
+
+export const DEFAULT_TUBE_PATH_POINTS: readonly IFurniturePoint3D[] = [
+  { x: -0.5, y: -0.4, z: 0 },
+  { x: -0.15, y: 0.35, z: 0.25 },
+  { x: 0.5, y: -0.35, z: 0 },
+];
+
+export type TSilhouetteMode = 'extrude' | 'lathe';
+
+export interface ISilhouettePreset {
+  id: string;
+  label: string;
+  mode: TSilhouetteMode;
+  points: readonly IFurniturePoint2D[];
+}
+
+export const SILHOUETTE_PRESETS: readonly ISilhouettePreset[] = [
+  {
+    id: 'l-shape',
+    label: 'L-Shape',
+    mode: 'extrude',
+    points: [
+      { x: -0.5, y: -0.5 },
+      { x: 0.5, y: -0.5 },
+      { x: 0.5, y: -0.1 },
+      { x: -0.1, y: -0.1 },
+      { x: -0.1, y: 0.5 },
+      { x: -0.5, y: 0.5 },
+    ],
+  },
+  {
+    id: 'arch',
+    label: 'Arch',
+    mode: 'extrude',
+    points: [
+      { x: -0.5, y: -0.5 },
+      { x: 0.5, y: -0.5 },
+      { x: 0.5, y: 0 },
+      { x: 0.45, y: 0.35, smooth: true },
+      { x: 0, y: 0.5, smooth: true },
+      { x: -0.45, y: 0.35, smooth: true },
+      { x: -0.5, y: 0 },
+    ],
+  },
+  {
+    id: 'kidney-curve',
+    label: 'Kidney Curve',
+    mode: 'extrude',
+    points: [
+      { x: -0.45, y: -0.25 },
+      { x: -0.15, y: -0.45, smooth: true },
+      { x: 0.35, y: -0.3, smooth: true },
+      { x: 0.45, y: 0.15, smooth: true },
+      { x: 0.1, y: 0.4, smooth: true },
+      { x: -0.35, y: 0.3, smooth: true },
+      { x: -0.5, y: 0, smooth: true },
+    ],
+  },
+  {
+    id: 'turned-leg',
+    label: 'Turned Leg',
+    mode: 'lathe',
+    points: DEFAULT_LATHE_POINTS,
+  },
+  {
+    id: 'vase',
+    label: 'Vase',
+    mode: 'lathe',
+    points: [
+      { x: 0, y: -0.5 },
+      { x: 0.18, y: -0.5 },
+      { x: 0.28, y: -0.32, smooth: true },
+      { x: 0.34, y: 0, smooth: true },
+      { x: 0.24, y: 0.28, smooth: true },
+      { x: 0.14, y: 0.45 },
+      { x: 0.16, y: 0.5 },
+      { x: 0, y: 0.5 },
+    ],
+  },
+] as const;
 
 export const LEGACY_CATEGORY_TO_BLUEPRINT_CATEGORY: Record<ParametricFurnitureCategory, TFurnitureCategory> = {
   table: 'tables',
@@ -78,6 +205,24 @@ export function getMaterialPbr(slot: IMaterialSlot): { roughness: number; metaln
   return FURNITURE_FINISH_PBR[slot.finish];
 }
 
+export function cloneFurniturePart(part: IFurniturePart): IFurniturePart {
+  return {
+    id: part.id,
+    name: part.name,
+    shape: part.shape,
+    dimensions: { ...part.dimensions },
+    position: { ...part.position },
+    rotation: { ...part.rotation },
+    materialSlot: part.materialSlot,
+    ...(part.bevelRadius === undefined ? {} : { bevelRadius: part.bevelRadius }),
+    ...(part.points2D === undefined ? {} : { points2D: part.points2D.map((point: IFurniturePoint2D): IFurniturePoint2D => ({ ...point })) }),
+    ...(part.pathPoints3D === undefined
+      ? {}
+      : { pathPoints3D: part.pathPoints3D.map((point: IFurniturePoint3D): IFurniturePoint3D => ({ ...point })) }),
+    ...(part.tubeRadius === undefined ? {} : { tubeRadius: part.tubeRadius }),
+  };
+}
+
 export function createFurniturePart(
   id: string,
   name: string,
@@ -85,17 +230,19 @@ export function createFurniturePart(
   dimensions: { width: number; height: number; depth: number },
   position: IVector3D,
   materialSlot: string,
-  rotation: IEulerRotation = { x: 0, y: 0, z: 0 }
+  rotation: IEulerRotation = { x: 0, y: 0, z: 0 },
+  shapeParameters: IFurniturePartShapeParameters = {}
 ): IFurniturePart {
-  return {
+  return cloneFurniturePart({
     id,
     name,
     shape,
-    dimensions: { ...dimensions },
-    position: { ...position },
-    rotation: { ...rotation },
+    dimensions,
+    position,
+    rotation,
     materialSlot,
-  };
+    ...shapeParameters,
+  });
 }
 
 function buildTableParts(): IFurniturePart[] {
@@ -205,12 +352,7 @@ export function cloneBlueprint(blueprint: IFurnitureBlueprint, id: string = blue
     category: blueprint.category,
     isPreset: false,
     thumbnailDataUrl: undefined,
-    parts: blueprint.parts.map((part: IFurniturePart): IFurniturePart => ({
-      ...part,
-      dimensions: { ...part.dimensions },
-      position: { ...part.position },
-      rotation: { ...part.rotation },
-    })),
+    parts: blueprint.parts.map((part: IFurniturePart): IFurniturePart => cloneFurniturePart(part)),
     materials: Object.fromEntries(
       Object.entries(blueprint.materials).map(([key, slot]: [string, IMaterialSlot]): [string, IMaterialSlot] => [key, { ...slot }])
     ),

@@ -1,27 +1,19 @@
-import { Injectable, Signal, WritableSignal, computed, effect, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, of, tap } from 'rxjs';
+import { Injectable, Signal, WritableSignal, computed, signal } from '@angular/core';
+import { Observable, of } from 'rxjs';
 import {
-  IFurnitureBlueprint,
-  IUserProfile,
-  cloneBlueprint,
-  createBlankBlueprint,
   FURNITURE_PRESETS,
+  IFurnitureBlueprint,
+  cloneBlueprint,
+  cloneFurniturePart,
+  createBlankBlueprint,
 } from '@spacio/shared-types';
-import { AuthService } from './auth.service';
 
-const BLUEPRINTS_ENDPOINT: string = '/api/blueprints';
-const CACHE_KEY_PREFIX: string = 'spacio.catalog.';
+const CUSTOM_BLUEPRINTS_STORAGE_KEY: string = 'spacio_custom_blueprints';
 
 function cloneStoredBlueprint(blueprint: IFurnitureBlueprint): IFurnitureBlueprint {
   return {
     ...blueprint,
-    parts: blueprint.parts.map((part) => ({
-      ...part,
-      dimensions: { ...part.dimensions },
-      position: { ...part.position },
-      rotation: { ...part.rotation },
-    })),
+    parts: blueprint.parts.map((part) => cloneFurniturePart(part)),
     materials: Object.fromEntries(
       Object.entries(blueprint.materials).map(([key, slot]) => [key, { ...slot }])
     ),
@@ -30,9 +22,6 @@ function cloneStoredBlueprint(blueprint: IFurnitureBlueprint): IFurnitureBluepri
 
 @Injectable({ providedIn: 'root' })
 export class FurnitureCatalogService {
-  private readonly _http: HttpClient = inject(HttpClient);
-  private readonly _auth: AuthService = inject(AuthService);
-
   private readonly _blueprints: WritableSignal<IFurnitureBlueprint[]> = signal<IFurnitureBlueprint[]>(
     FURNITURE_PRESETS.map((preset: IFurnitureBlueprint): IFurnitureBlueprint => cloneStoredBlueprint(preset))
   );
@@ -52,14 +41,11 @@ export class FurnitureCatalogService {
   public readonly error: Signal<string | null> = this._error.asReadonly();
 
   public constructor() {
-    this._applyCustom(this._readCache(this._cacheKey()));
-    effect((): void => {
-      this._loadForUser(this._auth.currentUser());
-    });
+    this._applyCustom(this._readCache());
   }
 
   public refresh(): void {
-    this._loadForUser(this._auth.currentUser());
+    this._applyCustom(this._readCache());
   }
 
   public getById(id: string): IFurnitureBlueprint | undefined {
@@ -76,49 +62,13 @@ export class FurnitureCatalogService {
   public saveBlueprint(blueprint: IFurnitureBlueprint): Observable<IFurnitureBlueprint> {
     const prepared: IFurnitureBlueprint = this._prepare(blueprint);
     this._upsert(prepared);
-    if (!this._auth.isAuthenticated()) {
-      this._error.set('Saved locally — sign in to sync this piece.');
-      return of(prepared);
-    }
-
-    return this._http.post<IFurnitureBlueprint>(BLUEPRINTS_ENDPOINT, prepared, {
-      headers: this._auth.authorizationHeaders(),
-    }).pipe(
-      tap((saved: IFurnitureBlueprint): void => {
-        this._upsert(saved);
-        this._isOnline.set(true);
-        this._error.set(null);
-      }),
-      catchError((): Observable<IFurnitureBlueprint> => {
-        this._isOnline.set(false);
-        this._error.set('Offline — saved locally.');
-        return of(prepared);
-      })
-    );
+    return of(prepared);
   }
 
   public updateBlueprint(id: string, blueprint: IFurnitureBlueprint): Observable<IFurnitureBlueprint> {
     const prepared: IFurnitureBlueprint = this._prepare({ ...blueprint, id });
     this._upsert(prepared);
-    if (!this._auth.isAuthenticated()) {
-      this._error.set('Updated locally — sign in to sync this piece.');
-      return of(prepared);
-    }
-
-    return this._http.put<IFurnitureBlueprint>(`${BLUEPRINTS_ENDPOINT}/${encodeURIComponent(id)}`, prepared, {
-      headers: this._auth.authorizationHeaders(),
-    }).pipe(
-      tap((saved: IFurnitureBlueprint): void => {
-        this._upsert(saved);
-        this._isOnline.set(true);
-        this._error.set(null);
-      }),
-      catchError((): Observable<IFurnitureBlueprint> => {
-        this._isOnline.set(false);
-        this._error.set('Offline — updated locally.');
-        return of(prepared);
-      })
-    );
+    return of(prepared);
   }
 
   public deleteBlueprint(id: string): Observable<void> {
@@ -129,21 +79,7 @@ export class FurnitureCatalogService {
       items.filter((item: IFurnitureBlueprint): boolean => item.id !== id)
     );
     this._persistCache();
-    if (!this._auth.isAuthenticated()) return of(void 0);
-
-    return this._http.delete<void>(`${BLUEPRINTS_ENDPOINT}/${encodeURIComponent(id)}`, {
-      headers: this._auth.authorizationHeaders(),
-    }).pipe(
-      tap((): void => {
-        this._isOnline.set(true);
-        this._error.set(null);
-      }),
-      catchError((): Observable<void> => {
-        this._isOnline.set(false);
-        this._error.set('Offline — removed locally.');
-        return of(void 0);
-      })
-    );
+    return of(void 0);
   }
 
   public createBlankDraft(): IFurnitureBlueprint {
@@ -163,36 +99,11 @@ export class FurnitureCatalogService {
     return `blueprint-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  private _loadForUser(user: IUserProfile | null): void {
-    if (!user) {
-      this._applyCustom(this._readCache(this._cacheKey()));
-      return;
-    }
-
-    this._isLoading.set(true);
-    this._error.set(null);
-    this._http.get<IFurnitureBlueprint[]>(BLUEPRINTS_ENDPOINT, {
-      headers: this._auth.authorizationHeaders(),
-    }).subscribe({
-      next: (items: IFurnitureBlueprint[]): void => {
-        this._applyCustom(items.filter((item: IFurnitureBlueprint): boolean => !item.isPreset));
-        this._isOnline.set(true);
-        this._isLoading.set(false);
-      },
-      error: (): void => {
-        this._applyCustom(this._readCache(this._cacheKey()));
-        this._isOnline.set(false);
-        this._error.set('Offline — showing cached furniture.');
-        this._isLoading.set(false);
-      },
-    });
-  }
-
   private _prepare(blueprint: IFurnitureBlueprint): IFurnitureBlueprint {
     return {
       ...cloneStoredBlueprint(blueprint),
       id: blueprint.id || this.generateId(),
-      userId: this._auth.currentUser()?.id ?? null,
+      userId: null,
       isPreset: false,
     };
   }
@@ -219,17 +130,22 @@ export class FurnitureCatalogService {
     this._blueprints.set([...byId.values()]);
   }
 
-  private _cacheKey(): string {
-    return `${CACHE_KEY_PREFIX}${this._auth.currentUser()?.id ?? 'guest'}`;
-  }
-
-  private _readCache(key: string): IFurnitureBlueprint[] {
+  private _readCache(): IFurnitureBlueprint[] {
     if (typeof localStorage === 'undefined') return [];
-    const raw: string | null = localStorage.getItem(key);
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(CUSTOM_BLUEPRINTS_STORAGE_KEY);
+    } catch {
+      return [];
+    }
     if (!raw) return [];
     try {
       const parsed: IFurnitureBlueprint[] = JSON.parse(raw) as IFurnitureBlueprint[];
-      return parsed.filter((item: IFurnitureBlueprint): boolean => !item.isPreset && !!item.id);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (item: IFurnitureBlueprint): boolean =>
+          !!item && !item.isPreset && typeof item.id === 'string' && Array.isArray(item.parts)
+      );
     } catch {
       return [];
     }
@@ -240,6 +156,10 @@ export class FurnitureCatalogService {
     const custom: IFurnitureBlueprint[] = this._blueprints().filter(
       (item: IFurnitureBlueprint): boolean => !item.isPreset
     );
-    localStorage.setItem(this._cacheKey(), JSON.stringify(custom));
+    try {
+      localStorage.setItem(CUSTOM_BLUEPRINTS_STORAGE_KEY, JSON.stringify(custom));
+    } catch {
+      this._error.set('Local storage is full — this piece is kept for this session only.');
+    }
   }
 }

@@ -88,6 +88,16 @@
           </label>
           <div class="craft-field__badge">Shape: {{ part.shape }}</div>
 
+          @if (canOpenShapeStudio()) {
+            <button type="button" class="craft-panel__action" (click)="onOpenShapeStudio()">Open Shape Studio</button>
+          }
+
+          @if (showBevelRadius()) {
+            <label class="craft-field"><span>Bevel Radius (m)</span>
+              <input type="number" min="0" step="0.005" class="craft-field__input" [value]="formatNumber(part.bevelRadius ?? 0)" (change)="onPartBevelRadiusChange($event)" />
+            </label>
+          }
+
           <div class="craft-field__group-label">Dimensions (m)</div>
           <div class="craft-field__grid">
             <label class="craft-field"><span>Width</span>
@@ -189,4 +199,19 @@
     <button type="button" class="craft-savebar__save" [disabled]="isSaving()" (click)="onSave()">{{ isSaving() ? 'Saving…' : 'Save to Catalog' }}</button>
     <span class="craft-savebar__status">{{ saveMessage() }}</span>
   </footer>
+
+  @if (shapeStudioOpen()) {
+    @if (selectedPart(); as part) {
+      @if (canOpenShapeStudio()) {
+        <app-shape-studio
+          [part]="part"
+          (points2DChange)="onPoints2DChange($event)"
+          (pathPoints3DChange)="onPathPoints3DChange($event)"
+          (tubeRadiusChange)="onTubeRadiusChange($event)"
+          (bevelRadiusChange)="onBevelRadiusChange($event)"
+          (close)="onCloseShapeStudio()"
+        ></app-shape-studio>
+      }
+    }
+  }
 </div>

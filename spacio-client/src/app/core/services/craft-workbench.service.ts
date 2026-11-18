@@ -1,17 +1,26 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, of, tap } from 'rxjs';
 import {
+  DEFAULT_BEVEL_RADIUS,
+  DEFAULT_EXTRUDE_POINTS,
   DEFAULT_FURNITURE_MATERIAL_FINISH,
   DEFAULT_FURNITURE_SLOT_COLOR,
+  DEFAULT_LATHE_POINTS,
+  DEFAULT_TUBE_PATH_POINTS,
+  DEFAULT_TUBE_RADIUS,
   FURNITURE_CATEGORY_OPTIONS,
   IFurnitureBlueprint,
   IFurniturePart,
+  IFurniturePartShapeParameters,
+  IFurniturePoint2D,
+  IFurniturePoint3D,
   IMaterialSlot,
   MATERIAL_FINISH_OPTIONS,
   PART_SHAPE_OPTIONS,
   TMaterialFinish,
   TFurnitureCategory,
   TPartShape,
+  cloneFurniturePart,
   createFurnitureMaterialSlot,
   createFurniturePart,
 } from '@spacio/shared-types';
@@ -46,19 +55,54 @@ const MESSAGE_DUPLICATED: string = 'Duplicated part.';
 const MESSAGE_DUPLICATED_MIRROR: string = 'Duplicated with mirror.';
 
 const PART_SHAPE_BOX: TPartShape = 'box';
+const PART_SHAPE_ROUNDED_BOX: TPartShape = 'rounded-box';
 const PART_SHAPE_CYLINDER: TPartShape = 'cylinder';
 const PART_SHAPE_SPHERE: TPartShape = 'sphere';
 const PART_SHAPE_CAPSULE: TPartShape = 'capsule';
+const PART_SHAPE_CONE: TPartShape = 'cone';
+const PART_SHAPE_TORUS: TPartShape = 'torus';
+const PART_SHAPE_EXTRUDE: TPartShape = 'extrude-2d';
+const PART_SHAPE_LATHE: TPartShape = 'lathe-360';
+const PART_SHAPE_TUBE: TPartShape = 'tube-path';
 
 const AXIS_X: 'x' = 'x';
 const AXIS_Z: 'z' = 'z';
 
 const DEFAULT_PART_DIMENSIONS: Record<TPartShape, { width: number; height: number; depth: number }> = {
   [PART_SHAPE_BOX]: { width: 0.4, height: 0.4, depth: 0.4 },
+  [PART_SHAPE_ROUNDED_BOX]: { width: 0.4, height: 0.4, depth: 0.4 },
   [PART_SHAPE_CYLINDER]: { width: 0.2, height: 0.6, depth: 0.2 },
   [PART_SHAPE_SPHERE]: { width: 0.4, height: 0.4, depth: 0.4 },
   [PART_SHAPE_CAPSULE]: { width: 0.2, height: 0.6, depth: 0.2 },
+  [PART_SHAPE_CONE]: { width: 0.3, height: 0.6, depth: 0.3 },
+  [PART_SHAPE_TORUS]: { width: 0.5, height: 0.12, depth: 0.5 },
+  [PART_SHAPE_EXTRUDE]: { width: 0.6, height: 0.06, depth: 0.5 },
+  [PART_SHAPE_LATHE]: { width: 0.24, height: 0.6, depth: 0.24 },
+  [PART_SHAPE_TUBE]: { width: 0.6, height: 0.6, depth: 0.4 },
 };
+
+function createShapeParameters(shape: TPartShape): IFurniturePartShapeParameters {
+  if (shape === PART_SHAPE_ROUNDED_BOX || shape === PART_SHAPE_EXTRUDE) {
+    return {
+      bevelRadius: DEFAULT_BEVEL_RADIUS,
+      ...(shape === PART_SHAPE_EXTRUDE
+        ? { points2D: DEFAULT_EXTRUDE_POINTS.map((point: IFurniturePoint2D): IFurniturePoint2D => ({ ...point })) }
+        : {}),
+    };
+  }
+  if (shape === PART_SHAPE_LATHE) {
+    return {
+      points2D: DEFAULT_LATHE_POINTS.map((point: IFurniturePoint2D): IFurniturePoint2D => ({ ...point })),
+    };
+  }
+  if (shape === PART_SHAPE_TUBE) {
+    return {
+      pathPoints3D: DEFAULT_TUBE_PATH_POINTS.map((point: IFurniturePoint3D): IFurniturePoint3D => ({ ...point })),
+      tubeRadius: DEFAULT_TUBE_RADIUS,
+    };
+  }
+  return {};
+}
 const PART_GRID_COLUMNS: number = 3;
 const PART_GRID_STEP: number = 0.5;
 const PART_GRID_OFFSET: number = 0.5;
@@ -66,12 +110,7 @@ const PART_GRID_OFFSET: number = 0.5;
 function cloneDraft(blueprint: IFurnitureBlueprint): IFurnitureBlueprint {
   return {
     ...blueprint,
-    parts: blueprint.parts.map((part: IFurniturePart): IFurniturePart => ({
-      ...part,
-      dimensions: { ...part.dimensions },
-      position: { ...part.position },
-      rotation: { ...part.rotation },
-    })),
+    parts: blueprint.parts.map((part: IFurniturePart): IFurniturePart => cloneFurniturePart(part)),
     materials: Object.fromEntries(
       Object.entries(blueprint.materials).map(([key, slot]: [string, IMaterialSlot]): [string, IMaterialSlot] => [key, { ...slot }])
     ),
@@ -170,7 +209,9 @@ export class CraftWorkbenchService {
       shape,
       dimensions,
       { x: (index % PART_GRID_COLUMNS) * PART_GRID_STEP - PART_GRID_OFFSET, y: dimensions.height / 2, z: 0 },
-      materialSlot
+      materialSlot,
+      { x: 0, y: 0, z: 0 },
+      createShapeParameters(shape)
     );
     this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
       ...blueprint,
@@ -186,10 +227,9 @@ export class CraftWorkbenchService {
     const mirrorX: boolean = this._mirrorX();
     const mirrorZ: boolean = this._mirrorZ();
     const copy: IFurniturePart = {
-      ...part,
+      ...cloneFurniturePart(part),
       id: this._catalog.generateId(),
       name: `${part.name}${COPY_SUFFIX}`,
-      dimensions: { ...part.dimensions },
       position: {
         x: mirrorX ? -part.position.x : part.position.x + part.dimensions.width,
         y: part.position.y,
@@ -263,6 +303,32 @@ export class CraftWorkbenchService {
 
   public updatePartMaterialSlot(materialSlot: string): void {
     this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, materialSlot }));
+  }
+
+  public updatePartBevelRadius(value: number): void {
+    if (!Number.isFinite(value) || value < 0) return;
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, bevelRadius: value }));
+  }
+
+  public updatePartPoints2D(points: readonly IFurniturePoint2D[]): void {
+    if (points.length < 3) return;
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      points2D: points.map((point: IFurniturePoint2D): IFurniturePoint2D => ({ ...point })),
+    }));
+  }
+
+  public updatePartPathPoints3D(points: readonly IFurniturePoint3D[]): void {
+    if (points.length < 2) return;
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      pathPoints3D: points.map((point: IFurniturePoint3D): IFurniturePoint3D => ({ ...point })),
+    }));
+  }
+
+  public updatePartTubeRadius(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, tubeRadius: value }));
   }
 
   public toggleMirror(axis: 'x' | 'z'): void {
