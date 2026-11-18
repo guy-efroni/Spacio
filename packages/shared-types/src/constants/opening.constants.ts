@@ -1,5 +1,5 @@
 import { WallOpeningType } from '../enums/wall-opening-type.enum';
-import { IMaterialSlot } from '../furniture/material-slot.interface';
+import { IWallMaterialSlot } from '../furniture/wall-material-slot.interface';
 import { createMaterialSlot } from './furniture.constants';
 
 export const DEFAULT_DOOR_WIDTH = 0.9;
@@ -35,7 +35,7 @@ export const OPENING_FRAME_PREFIX = 'opening-frame';
 export const OPENING_GLASS_PREFIX = 'opening-glass';
 export const OPENING_DOOR_PREFIX = 'opening-door';
 
-export function createDefaultOpeningMaterials(type: WallOpeningType): Record<string, IMaterialSlot> {
+export function createDefaultOpeningMaterials(type: WallOpeningType): Record<string, IWallMaterialSlot> {
   if (type === WallOpeningType.Door) {
     return {
       frame: createMaterialSlot('frame', 'Frame', '#8b7355', 0.7, 0.05),

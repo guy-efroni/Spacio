@@ -1,13 +1,7 @@
-﻿import { IMaterialSlot } from './material-slot.interface';
+﻿import { IPlacedFurniture } from './placed-furniture.interface';
 
-export type ParametricFurnitureCategory = 'table' | 'sofa' | 'bed' | 'storage';
+export type ParametricFurnitureCategory = 'table' | 'sofa' | 'bed' | 'storage' | 'decor';
 
-export interface IParametricFurniture {
-  id: string;
+export interface IParametricFurniture extends IPlacedFurniture {
   category: ParametricFurnitureCategory;
-  position: { x: number; y: number; z: number };
-  rotationY: number;
-  dimensions: { width: number; height: number; depth: number };
-  styleOptions: Record<string, string>;
-  materials: Record<string, IMaterialSlot>;
 }

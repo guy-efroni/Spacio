@@ -9,19 +9,20 @@
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, TitleCasePipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { FloorplanService } from '../../core/services/floorplan.service';
+import { FurnitureCatalogService } from '../../core/services/furniture-catalog.service';
 import { OpeningPlacementBounds, getOpeningPlacementBounds } from '../../shared/utils/opening.util';
 import {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
-  FURNITURE_MAX_DIMENSION,
-  FURNITURE_MAX_HEIGHT,
-  FURNITURE_MIN_DIMENSION,
-  FURNITURE_MIN_HEIGHT,
+  IFurnitureBlueprint,
   IMaterialSlot,
-  IParametricFurniture,
+  IPlacedFurniture,
+  IWallMaterialSlot,
   IWallOpening,
   IWallSegment,
+  MATERIAL_FINISH_OPTIONS,
   MATERIAL_FINISH_PRESETS,
   MAX_OPENING_ELEVATION,
   MAX_OPENING_HEIGHT,
@@ -34,6 +35,7 @@ import {
   MIN_WALL_HEIGHT,
   MIN_WALL_PIER,
   MIN_WALL_THICKNESS,
+  TMaterialFinish,
   WALL_COLOR_PRESETS,
   WallOpeningType,
   createDefaultOpeningMaterials,
@@ -41,6 +43,9 @@ import {
 } from '@spacio/shared-types';
 
 type WallColorPreset = { readonly name: string; readonly value: string };
+
+const DEG_TO_RAD: number = Math.PI / 180;
+const RAD_TO_DEG: number = 180 / Math.PI;
 
 @Component({
   selector: 'app-property-inspector',
@@ -51,6 +56,8 @@ type WallColorPreset = { readonly name: string; readonly value: string };
 })
 export class PropertyInspectorComponent {
   private readonly _floorplanService: FloorplanService = inject(FloorplanService);
+  private readonly _catalog: FurnitureCatalogService = inject(FurnitureCatalogService);
+  private readonly _router: Router = inject(Router);
 
   public readonly selectedWall: Signal<IWallSegment | null> = computed<IWallSegment | null>(() => {
     const id: string | null = this._floorplanService.selectedWallId();
@@ -58,10 +65,16 @@ export class PropertyInspectorComponent {
     return this._floorplanService.walls().find((wall: IWallSegment) => wall.id === id) ?? null;
   });
 
-  public readonly selectedFurniture: Signal<IParametricFurniture | null> = computed<IParametricFurniture | null>(() => {
+  public readonly selectedFurniture: Signal<IPlacedFurniture | null> = computed<IPlacedFurniture | null>(() => {
     const id: string | null = this._floorplanService.selectedFurnitureId();
     if (!id) return null;
-    return this._floorplanService.furniture().find((item: IParametricFurniture) => item.id === id) ?? null;
+    return this._floorplanService.furniture().find((item: IPlacedFurniture): boolean => item.instanceId === id) ?? null;
+  });
+
+  public readonly selectedBlueprint: Signal<IFurnitureBlueprint | null> = computed<IFurnitureBlueprint | null>(() => {
+    const item: IPlacedFurniture | null = this.selectedFurniture();
+    if (!item) return null;
+    return this._catalog.getById(item.blueprintId) ?? null;
   });
 
   public readonly selectionMode: Signal<'wall' | 'furniture' | 'none'> = computed<'wall' | 'furniture' | 'none'>(() => {
@@ -86,9 +99,9 @@ export class PropertyInspectorComponent {
   });
 
   public readonly furnitureIdSuffix: Signal<string> = computed<string>(() => {
-    const item: IParametricFurniture | null = this.selectedFurniture();
+    const item: IPlacedFurniture | null = this.selectedFurniture();
     if (!item) return 'unknown';
-    const parts: string[] = item.id.split('-');
+    const parts: string[] = item.instanceId.split('-');
     return parts[parts.length - 1] ?? 'unknown';
   });
 
@@ -122,12 +135,11 @@ export class PropertyInspectorComponent {
   public readonly openingElevationStep: number = 0.05;
   public readonly openingPositionStep: number = 0.05;
 
-  public readonly minFurnitureDimension: number = FURNITURE_MIN_DIMENSION;
-  public readonly maxFurnitureDimension: number = FURNITURE_MAX_DIMENSION;
-  public readonly minFurnitureHeight: number = FURNITURE_MIN_HEIGHT;
-  public readonly maxFurnitureHeight: number = FURNITURE_MAX_HEIGHT;
-  public readonly furnitureStep: number = 0.05;
+  public readonly furnitureScaleStep: number = 0.05;
+  public readonly minFurnitureScale: number = 0.2;
+  public readonly maxFurnitureScale: number = 5;
   public readonly finishPresets: readonly { name: string; roughness: number; metalness: number }[] = MATERIAL_FINISH_PRESETS;
+  public readonly finishOptions: readonly TMaterialFinish[] = MATERIAL_FINISH_OPTIONS;
 
   public constructor() {
     effect((): void => {
@@ -236,9 +248,9 @@ export class PropertyInspectorComponent {
     this._floorplanService.updateOpening(id, { elevation: Math.min(this.openingMaxElevation(opening), Math.max(this.minOpeningElevation, value)) });
   }
 
-  public openingMaterials(opening: IWallOpening): Array<{ key: string; slot: IMaterialSlot }> {
+  public openingMaterials(opening: IWallOpening): Array<{ key: string; slot: IWallMaterialSlot }> {
     const mats = opening.materials ?? createDefaultOpeningMaterials(opening.type);
-    return Object.entries(mats).map(([key, slot]: [string, IMaterialSlot]) => ({ key, slot }));
+    return Object.entries(mats).map(([key, slot]: [string, IWallMaterialSlot]) => ({ key, slot }));
   }
 
   public openingStyleEntries(opening: IWallOpening): Array<{ key: string; value: string }> {
@@ -251,16 +263,17 @@ export class PropertyInspectorComponent {
     if (!opening) return;
     const slot = (opening.materials ?? {})[slotKey];
     if (!slot) return;
-    this._floorplanService.updateOpening(openingId, { materials: { [slotKey]: { ...slot, color } } as Record<string, IMaterialSlot> });
+    this._floorplanService.updateOpening(openingId, { materials: { [slotKey]: { ...slot, color } } as Record<string, IWallMaterialSlot> });
   }
 
   public onOpeningMaterialFinishChange(openingId: string, slotKey: string, finishName: string): void {
     const opening = this.wallOpenings().find((o) => o.id === openingId);
     if (!opening) return;
-    const slot = (opening.materials ?? {})[slotKey];
+    const slot: IWallMaterialSlot | undefined = (opening.materials ?? {})[slotKey];
     const preset = this.finishPresets.find((p) => p.name === finishName);
     if (!slot || !preset) return;
-    this._floorplanService.updateOpening(openingId, { materials: { [slotKey]: { ...slot, roughness: preset.roughness, metalness: preset.metalness } } as Record<string, IMaterialSlot> });
+    const finish: TMaterialFinish = preset.metalness >= 0.8 ? 'metallic' : preset.roughness <= 0.25 ? 'gloss' : preset.roughness >= 0.75 ? 'matte' : 'satin';
+    this._floorplanService.updateOpening(openingId, { materials: { [slotKey]: { ...slot, finish, roughness: preset.roughness, metalness: preset.metalness } } as Record<string, IWallMaterialSlot> });
   }
 
   public onOpeningStyleChange(openingId: string, styleKey: string, value: string): void {
@@ -269,73 +282,78 @@ export class PropertyInspectorComponent {
     this._floorplanService.updateOpening(openingId, { styleOptions: { ...(opening.styleOptions ?? {}), [styleKey]: value } });
   }
 
-  // Furniture
-  public furnitureMaterialEntries(item: IParametricFurniture): Array<{ key: string; slot: IMaterialSlot }> {
-    return Object.entries(item.materials).map(([key, slot]: [string, IMaterialSlot]) => ({ key, slot }));
-  }
-
-  public furnitureStyleEntries(item: IParametricFurniture): Array<{ key: string; value: string }> {
-    return Object.entries(item.styleOptions).map(([key, value]: [string, string]) => ({ key, value }));
-  }
-
-  public styleOptionsFor(key: string, context: 'furniture' | 'opening', categoryOrType: string): readonly string[] {
-    if (context === 'furniture') {
-      if (key === 'topShape') return ['rectangle', 'rounded', 'oval'];
-      if (key === 'legStyle') return ['tapered', 'industrial', 'cylindrical'];
-      if (key === 'armStyle') return ['rounded', 'square'];
-      if (key === 'cushionStyle') return ['tufted', 'plain'];
-      if (key === 'headboardStyle') return ['panel', 'slat'];
-      if (key === 'baseStyle') return ['platform', 'legs'];
-      if (key === 'doorStyle') return ['flat', 'slatted'];
-      if (key === 'shelfStyle') return ['open', 'mixed'];
-    } else {
-      if (key === 'panelStyle') return ['solid', 'glass'];
-      if (key === 'swing') return ['left', 'right'];
-      if (key === 'gridStyle') return ['single', '2x2', '3x2'];
-      if (key === 'mullionStyle') return ['none', 'colonial', 'prairie'];
-    }
+  public styleOptionsFor(key: string, categoryOrType: string): readonly string[] {
+    if (key === 'panelStyle') return ['solid', 'glass'];
+    if (key === 'swing') return ['left', 'right'];
+    if (key === 'gridStyle') return ['single', '2x2', '3x2'];
+    if (key === 'mullionStyle') return ['none', 'colonial', 'prairie'];
     return [categoryOrType];
   }
 
-  public onFurnitureDimensionChange(field: 'width' | 'height' | 'depth', value: number): void {
-    const item = this.selectedFurniture();
-    if (!item || !Number.isFinite(value)) return;
-    const min = field === 'height' ? this.minFurnitureHeight : this.minFurnitureDimension;
-    const max = field === 'height' ? this.maxFurnitureHeight : this.maxFurnitureDimension;
-    const clamped = Math.min(max, Math.max(min, value));
-    this._floorplanService.updateFurniture(item.id, { dimensions: { ...item.dimensions, [field]: clamped } });
+  public furnitureMaterialEntries(item: IPlacedFurniture): Array<{ key: string; slot: IMaterialSlot }> {
+    const blueprint: IFurnitureBlueprint | null = this.selectedBlueprint();
+    const base: Record<string, IMaterialSlot> = blueprint?.materials ?? {};
+    const overrides: Record<string, IMaterialSlot> = item.materialOverrides ?? {};
+    const keys: string[] = [...new Set<string>([...Object.keys(base), ...Object.keys(overrides)])];
+    return keys.map((key: string): { key: string; slot: IMaterialSlot } => ({
+      key,
+      slot: { ...(base[key] ?? overrides[key]), ...(overrides[key] ?? {}) },
+    }));
+  }
+
+  public furnitureRotationDegrees(item: IPlacedFurniture): number {
+    return Number((item.rotationY * RAD_TO_DEG).toFixed(2));
   }
 
   public onFurnitureRotationChange(value: number): void {
-    const item = this.selectedFurniture();
+    const item: IPlacedFurniture | null = this.selectedFurniture();
     if (!item || !Number.isFinite(value)) return;
-    this._floorplanService.updateFurniture(item.id, { rotationY: (value * Math.PI) / 180 });
+    this._floorplanService.updateFurniture(item.instanceId, { rotationY: value * DEG_TO_RAD });
   }
 
-  public furnitureRotationDeg(item: IParametricFurniture): number {
-    return (item.rotationY * 180) / Math.PI;
+  public onFurnitureScaleChange(axis: 'x' | 'y' | 'z', value: number): void {
+    const item: IPlacedFurniture | null = this.selectedFurniture();
+    if (!item || !Number.isFinite(value)) return;
+    const clamped: number = Math.min(this.maxFurnitureScale, Math.max(this.minFurnitureScale, value));
+    this._floorplanService.updateFurniture(item.instanceId, { scale: { ...item.scale, [axis]: clamped } });
   }
 
-  public onFurnitureStyleChange(key: string, value: string): void {
-    const item = this.selectedFurniture();
-    if (!item) return;
-    this._floorplanService.updateFurniture(item.id, { styleOptions: { ...item.styleOptions, [key]: value } });
+  public onFurnitureUniformScaleChange(value: number): void {
+    const item: IPlacedFurniture | null = this.selectedFurniture();
+    if (!item || !Number.isFinite(value)) return;
+    const clamped: number = Math.min(this.maxFurnitureScale, Math.max(this.minFurnitureScale, value));
+    this._floorplanService.updateFurniture(item.instanceId, { scale: { x: clamped, y: clamped, z: clamped } });
+  }
+
+  public uniformScale(item: IPlacedFurniture): number {
+    return Number(((item.scale.x + item.scale.y + item.scale.z) / 3).toFixed(2));
   }
 
   public onFurnitureMaterialColorChange(slotKey: string, color: string): void {
-    const item = this.selectedFurniture();
-    if (!item) return;
-    const slot = item.materials[slotKey];
-    if (!slot) return;
-    this._floorplanService.updateFurniture(item.id, { materials: { [slotKey]: { ...slot, color } } as Record<string, IMaterialSlot> });
+    this._updateFurnitureOverride(slotKey, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, color }));
   }
 
-  public onFurnitureMaterialFinishChange(slotKey: string, finishName: string): void {
-    const item = this.selectedFurniture();
+  public onFurnitureMaterialFinishChange(slotKey: string, finish: TMaterialFinish): void {
+    this._updateFurnitureOverride(slotKey, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, finish }));
+  }
+
+  public onEditInCraftRoom(): void {
+    const item: IPlacedFurniture | null = this.selectedFurniture();
     if (!item) return;
-    const slot = item.materials[slotKey];
-    const preset = this.finishPresets.find((p) => p.name === finishName);
-    if (!slot || !preset) return;
-    this._floorplanService.updateFurniture(item.id, { materials: { [slotKey]: { ...slot, roughness: preset.roughness, metalness: preset.metalness } } as Record<string, IMaterialSlot> });
+    void this._router.navigate(['/craft'], { queryParams: { edit: item.blueprintId } });
+  }
+
+  private _updateFurnitureOverride(slotKey: string, mutator: (slot: IMaterialSlot) => IMaterialSlot): void {
+    const item: IPlacedFurniture | null = this.selectedFurniture();
+    if (!item) return;
+    const entries: ReadonlyArray<{ key: string; slot: IMaterialSlot }> = this.furnitureMaterialEntries(item);
+    const current: IMaterialSlot | undefined = entries.find((entry): boolean => entry.key === slotKey)?.slot;
+    if (!current) return;
+    this._floorplanService.updateFurniture(item.instanceId, {
+      materialOverrides: {
+        ...(item.materialOverrides ?? {}),
+        [slotKey]: mutator(current),
+      },
+    });
   }
 }

@@ -7,6 +7,7 @@
       </svg>
       <span class="app-header__title">Spacio</span>
     </div>
+    <app-workspace-nav class="app-header__nav"></app-workspace-nav>
     <div class="app-header__stats">
       <div class="app-header__stat">
         <span class="app-header__stat-value">{{ wallCount() }}</span>
@@ -23,6 +24,27 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
         <span>Reset</span>
       </button>
+      @if (isAuthenticated()) {
+        <span class="app-header__user">{{ currentUser()?.displayName }}</span>
+        <button type="button" class="app-header__button" (click)="onLogout()">Sign out</button>
+      } @else {
+        <button type="button" class="app-header__button" (click)="onToggleAuth()">Sign in</button>
+      }
+      @if (isAuthOpen() && !isAuthenticated()) {
+        <div class="app-header__auth-panel">
+          <div class="app-header__auth-tabs">
+            <button type="button" [class.app-header__auth-tab--active]="authMode() === 'login'" (click)="onAuthModeChange('login')">Log in</button>
+            <button type="button" [class.app-header__auth-tab--active]="authMode() === 'register'" (click)="onAuthModeChange('register')">Register</button>
+          </div>
+          @if (authMode() === 'register') {
+            <input type="text" placeholder="Display name" [value]="authDisplayName()" (input)="onAuthFieldChange('displayName', $event)" />
+          }
+          <input type="email" placeholder="Email" [value]="authEmail()" (input)="onAuthFieldChange('email', $event)" />
+          <input type="password" placeholder="Password" [value]="authPassword()" (input)="onAuthFieldChange('password', $event)" />
+          <button type="button" class="app-header__button" [disabled]="isAuthenticating()" (click)="onSubmitAuth()">{{ isAuthenticating() ? 'Please wait…' : 'Continue' }}</button>
+          @if (authMessage()) { <span class="app-header__auth-message">{{ authMessage() }}</span> }
+        </div>
+      }
     </div>
   </header>
 
@@ -44,10 +66,29 @@
           </button>
           @if (isCatalogOpen()) {
             <div class="app-floating-toolbar__catalog-popover">
-              <div class="app-floating-toolbar__catalog-title">Furniture</div>
-              @for (item of furnitureCatalog; track item.category) {
-                <button type="button" class="app-floating-toolbar__catalog-item" (click)="onSelectFurniture(item.category)">{{ item.label }}</button>
+              <div class="app-floating-toolbar__catalog-title">Furniture Catalog</div>
+              @if (isCatalogLoading()) {
+                <div class="app-floating-toolbar__catalog-hint">Loading blueprints…</div>
               }
+              @if (catalogError()) {
+                <div class="app-floating-toolbar__catalog-hint app-floating-toolbar__catalog-hint--error">{{ catalogError() }}</div>
+              }
+              @for (item of furnitureCatalog(); track item.id) {
+                <button type="button" class="app-floating-toolbar__catalog-item" (click)="onSelectFurniture(item)">
+                  @if (item.thumbnailDataUrl) {
+                    <img class="app-floating-toolbar__catalog-thumb" [src]="item.thumbnailDataUrl" [alt]="item.name" />
+                  } @else {
+                    <span class="app-floating-toolbar__catalog-thumb app-floating-toolbar__catalog-thumb--empty"></span>
+                  }
+                  <span class="app-floating-toolbar__catalog-item-text">
+                    <span class="app-floating-toolbar__catalog-name">{{ item.name }}</span>
+                    <span class="app-floating-toolbar__catalog-category">{{ item.category }}</span>
+                  </span>
+                </button>
+              } @empty {
+                <div class="app-floating-toolbar__catalog-hint">No blueprints yet — craft one in the Craft Room.</div>
+              }
+              <button type="button" class="app-floating-toolbar__catalog-craft" (click)="onOpenCraftRoom()">+ Craft new piece</button>
               <div class="app-floating-toolbar__catalog-hint">Click floor to place · R to rotate</div>
             </div>
           }
