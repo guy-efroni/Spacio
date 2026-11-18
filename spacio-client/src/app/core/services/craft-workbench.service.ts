@@ -1,6 +1,8 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, of, tap } from 'rxjs';
 import {
+  DEFAULT_FURNITURE_MATERIAL_FINISH,
+  DEFAULT_FURNITURE_SLOT_COLOR,
   FURNITURE_CATEGORY_OPTIONS,
   IFurnitureBlueprint,
   IFurniturePart,
@@ -19,6 +21,47 @@ export interface ICraftMaterialEntry {
   key: string;
   slot: IMaterialSlot;
 }
+
+const BLANK_BLUEPRINT_OPTION_ID: string = 'blank';
+const DEFAULT_BLUEPRINT_NAME: string = 'Untitled Piece';
+const DEFAULT_BLUEPRINT_CATEGORY: TFurnitureCategory = 'decor';
+const FALLBACK_MATERIAL_SLOT_KEY: string = 'material-1';
+const MATERIAL_SLOT_KEY_PREFIX: string = 'material-';
+const MATERIAL_SLOT_KEY_RANDOM_LENGTH: number = 4;
+const DEFAULT_MATERIAL_LABEL_PREFIX: string = 'Material ';
+const COPY_SUFFIX: string = ' Copy';
+const EDITED_SUFFIX: string = ' Edited';
+const UNSAVED_CHANGES_MESSAGE: string = 'Unsaved changes';
+const BLANK_STARTED_MESSAGE: string = 'Blank piece started.';
+const SAVING_MESSAGE: string = 'Saving…';
+const NO_PARTS_SAVE_MESSAGE: string = 'Add at least one part before saving.';
+const SAVE_FAILED_MESSAGE: string = 'Save failed. Please try again.';
+
+const MESSAGE_BLUEPRINT_LOADED_PREFIX: string = 'Cloned “';
+const MESSAGE_BLUEPRINT_LOADED_SUFFIX: string = '”.';
+const MESSAGE_ADDED_PREFIX: string = 'Added ';
+const MESSAGE_SAVED_PREFIX: string = '“';
+const MESSAGE_SAVED_SUFFIX: string = '” saved to catalog.';
+const MESSAGE_DUPLICATED: string = 'Duplicated part.';
+const MESSAGE_DUPLICATED_MIRROR: string = 'Duplicated with mirror.';
+
+const PART_SHAPE_BOX: TPartShape = 'box';
+const PART_SHAPE_CYLINDER: TPartShape = 'cylinder';
+const PART_SHAPE_SPHERE: TPartShape = 'sphere';
+const PART_SHAPE_CAPSULE: TPartShape = 'capsule';
+
+const AXIS_X: 'x' = 'x';
+const AXIS_Z: 'z' = 'z';
+
+const DEFAULT_PART_DIMENSIONS: Record<TPartShape, { width: number; height: number; depth: number }> = {
+  [PART_SHAPE_BOX]: { width: 0.4, height: 0.4, depth: 0.4 },
+  [PART_SHAPE_CYLINDER]: { width: 0.2, height: 0.6, depth: 0.2 },
+  [PART_SHAPE_SPHERE]: { width: 0.4, height: 0.4, depth: 0.4 },
+  [PART_SHAPE_CAPSULE]: { width: 0.2, height: 0.6, depth: 0.2 },
+};
+const PART_GRID_COLUMNS: number = 3;
+const PART_GRID_STEP: number = 0.5;
+const PART_GRID_OFFSET: number = 0.5;
 
 function cloneDraft(blueprint: IFurnitureBlueprint): IFurnitureBlueprint {
   return {
@@ -41,8 +84,8 @@ export class CraftWorkbenchService {
 
   private readonly _draft: WritableSignal<IFurnitureBlueprint>;
   private readonly _selectedPartId: WritableSignal<string | null> = signal<string | null>(null);
-  private readonly _blueprintName: WritableSignal<string> = signal<string>('Untitled Piece');
-  private readonly _blueprintCategory: WritableSignal<TFurnitureCategory> = signal<TFurnitureCategory>('decor');
+  private readonly _blueprintName: WritableSignal<string> = signal<string>(DEFAULT_BLUEPRINT_NAME);
+  private readonly _blueprintCategory: WritableSignal<TFurnitureCategory> = signal<TFurnitureCategory>(DEFAULT_BLUEPRINT_CATEGORY);
   private readonly _saveMessage: WritableSignal<string> = signal<string>('');
   private readonly _isSaving: WritableSignal<boolean> = signal<boolean>(false);
   private readonly _isExisting: WritableSignal<boolean> = signal<boolean>(false);
@@ -91,7 +134,7 @@ export class CraftWorkbenchService {
     const blank: IFurnitureBlueprint = this._catalog.createBlankDraft();
     this._isExisting.set(false);
     this._applyBlueprint(blank, blank.name);
-    this._saveMessage.set('Blank piece started.');
+    this._saveMessage.set(BLANK_STARTED_MESSAGE);
   }
 
   public loadBlueprint(blueprint: IFurnitureBlueprint, message: string): void {
@@ -100,12 +143,12 @@ export class CraftWorkbenchService {
       ? cloneDraft(blueprint)
       : this._catalog.cloneAsDraft(blueprint);
     this._isExisting.set(isExisting);
-    this._applyBlueprint(source, isExisting ? blueprint.name : `${blueprint.name} Edited`);
+    this._applyBlueprint(source, isExisting ? blueprint.name : `${blueprint.name}${EDITED_SUFFIX}`);
     this._saveMessage.set(message);
   }
 
   public selectBlueprint(id: string): void {
-    if (id === 'blank') {
+    if (id === BLANK_BLUEPRINT_OPTION_ID) {
       this.startBlank();
       return;
     }
@@ -118,21 +161,15 @@ export class CraftWorkbenchService {
   }
 
   public addPart(shape: TPartShape): void {
-    const sizes: Record<TPartShape, { width: number; height: number; depth: number }> = {
-      box: { width: 0.4, height: 0.4, depth: 0.4 },
-      cylinder: { width: 0.2, height: 0.6, depth: 0.2 },
-      sphere: { width: 0.4, height: 0.4, depth: 0.4 },
-      capsule: { width: 0.2, height: 0.6, depth: 0.2 },
-    };
-    const dimensions: { width: number; height: number; depth: number } = sizes[shape];
+    const dimensions: { width: number; height: number; depth: number } = DEFAULT_PART_DIMENSIONS[shape];
     const index: number = this._draft().parts.length;
-    const materialSlot: string = Object.keys(this._draft().materials)[0] ?? 'material-1';
+    const materialSlot: string = Object.keys(this._draft().materials)[0] ?? FALLBACK_MATERIAL_SLOT_KEY;
     const part: IFurniturePart = createFurniturePart(
       this._catalog.generateId(),
       `${this._toTitleCase(shape)} ${index + 1}`,
       shape,
       dimensions,
-      { x: (index % 3) * 0.5 - 0.5, y: dimensions.height / 2, z: 0 },
+      { x: (index % PART_GRID_COLUMNS) * PART_GRID_STEP - PART_GRID_OFFSET, y: dimensions.height / 2, z: 0 },
       materialSlot
     );
     this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
@@ -140,7 +177,7 @@ export class CraftWorkbenchService {
       parts: [...blueprint.parts, part],
     }));
     this._selectedPartId.set(part.id);
-    this._saveMessage.set(`Added ${part.name}.`);
+    this._saveMessage.set(`${MESSAGE_ADDED_PREFIX}${part.name}.`);
   }
 
   public duplicateSelectedPart(): void {
@@ -151,7 +188,7 @@ export class CraftWorkbenchService {
     const copy: IFurniturePart = {
       ...part,
       id: this._catalog.generateId(),
-      name: `${part.name} Copy`,
+      name: `${part.name}${COPY_SUFFIX}`,
       dimensions: { ...part.dimensions },
       position: {
         x: mirrorX ? -part.position.x : part.position.x + part.dimensions.width,
@@ -165,7 +202,7 @@ export class CraftWorkbenchService {
       parts: [...blueprint.parts, copy],
     }));
     this._selectedPartId.set(copy.id);
-    this._saveMessage.set(mirrorX || mirrorZ ? 'Duplicated with mirror.' : 'Duplicated part.');
+    this._saveMessage.set(mirrorX || mirrorZ ? MESSAGE_DUPLICATED_MIRROR : MESSAGE_DUPLICATED);
   }
 
   public deleteSelectedPart(): void {
@@ -229,7 +266,7 @@ export class CraftWorkbenchService {
   }
 
   public toggleMirror(axis: 'x' | 'z'): void {
-    if (axis === 'x') this._mirrorX.update((value: boolean): boolean => !value);
+    if (axis === AXIS_X) this._mirrorX.update((value: boolean): boolean => !value);
     else this._mirrorZ.update((value: boolean): boolean => !value);
   }
 
@@ -243,12 +280,12 @@ export class CraftWorkbenchService {
 
   public addMaterialSlot(): void {
     const index: number = Object.keys(this._draft().materials).length + 1;
-    const key: string = `material-${index}-${this._catalog.generateId().slice(0, 4)}`;
+    const key: string = `${MATERIAL_SLOT_KEY_PREFIX}${index}-${this._catalog.generateId().slice(0, MATERIAL_SLOT_KEY_RANDOM_LENGTH)}`;
     this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
       ...blueprint,
       materials: {
         ...blueprint.materials,
-        [key]: createFurnitureMaterialSlot(`Material ${index}`, '#8b5a2b', 'satin'),
+        [key]: createFurnitureMaterialSlot(`${DEFAULT_MATERIAL_LABEL_PREFIX}${index}`, DEFAULT_FURNITURE_SLOT_COLOR, DEFAULT_FURNITURE_MATERIAL_FINISH),
       },
     }));
   }
@@ -291,19 +328,19 @@ export class CraftWorkbenchService {
   public save(): Observable<IFurnitureBlueprint> {
     if (this._isSaving()) return of(this._draft());
     if (this._draft().parts.length === 0) {
-      this._saveMessage.set('Add at least one part before saving.');
+      this._saveMessage.set(NO_PARTS_SAVE_MESSAGE);
       return of(this._draft());
     }
 
     const prepared: IFurnitureBlueprint = {
       ...this._draft(),
       userId: null,
-      name: this._blueprintName().trim() || 'Untitled Piece',
+      name: this._blueprintName().trim() || DEFAULT_BLUEPRINT_NAME,
       category: this._blueprintCategory(),
       isPreset: false,
     };
     this._isSaving.set(true);
-    this._saveMessage.set('Saving…');
+    this._saveMessage.set(SAVING_MESSAGE);
     const request: Observable<IFurnitureBlueprint> = this._isExisting()
       ? this._catalog.updateBlueprint(prepared.id, prepared)
       : this._catalog.saveBlueprint(prepared);
@@ -314,11 +351,11 @@ export class CraftWorkbenchService {
         this._blueprintName.set(saved.name);
         this._blueprintCategory.set(saved.category);
         this._isSaving.set(false);
-        this._saveMessage.set(`“${saved.name}” saved to catalog.`);
+        this._saveMessage.set(`${MESSAGE_SAVED_PREFIX}${saved.name}${MESSAGE_SAVED_SUFFIX}`);
       }),
       catchError((): Observable<IFurnitureBlueprint> => {
         this._isSaving.set(false);
-        this._saveMessage.set('Save failed. Please try again.');
+        this._saveMessage.set(SAVE_FAILED_MESSAGE);
         return of(this._draft());
       })
     );
@@ -337,7 +374,7 @@ export class CraftWorkbenchService {
 
   private _mutateDraft(mutator: (blueprint: IFurnitureBlueprint) => IFurnitureBlueprint): void {
     this._draft.update(mutator);
-    this._saveMessage.set('Unsaved changes');
+    this._saveMessage.set(UNSAVED_CHANGES_MESSAGE);
   }
 
   private _updateSelectedPart(mutator: (part: IFurniturePart) => IFurniturePart): void {

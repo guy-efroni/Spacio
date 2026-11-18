@@ -9,6 +9,12 @@ import { IWallMaterialSlot } from '../furniture/wall-material-slot.interface';
 
 export const FURNITURE_MESH_PREFIX = 'furniture';
 export const FURNITURE_USER_DATA_TYPE = 'furniture';
+export const FURNITURE_GROUP_NAME = 'furniture-mesh';
+export const FURNITURE_BODY_NAME = 'furniture-body';
+export const FURNITURE_PART_USER_DATA_TYPE = 'furniture-part';
+export const FURNITURE_PART_ID_USER_DATA_KEY = 'partId';
+export const DEFAULT_FURNITURE_SLOT_COLOR = '#c8c8d0';
+export const DEFAULT_FURNITURE_MATERIAL_FINISH: TMaterialFinish = 'satin';
 
 export const FURNITURE_ROTATION_STEP_RAD = Math.PI / 12;
 export const FURNITURE_MIN_DIMENSION = 0.3;

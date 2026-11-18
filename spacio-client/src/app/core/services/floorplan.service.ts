@@ -35,6 +35,11 @@ const OPENING_EPSILON: number = 1e-6;
 const MAX_HISTORY_DEPTH: number = 50;
 const EDGE_KEY_SEPARATOR: string = '->';
 const POINT_KEY_SEPARATOR: string = ',';
+const OPENING_ID_PREFIX: string = 'opening-';
+const FURNITURE_ID_PREFIX: string = 'furniture-';
+const ID_RANDOM_RADIX: number = 36;
+const ID_RANDOM_START: number = 2;
+const ID_RANDOM_LENGTH: number = 7;
 
 type IFloorplanSnapshot = {
   walls: IWallSegment[];
@@ -499,11 +504,11 @@ export class FloorplanService {
   }
 
   private _generateOpeningId(): string {
-    return `opening-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    return `${OPENING_ID_PREFIX}${Date.now()}-${Math.random().toString(ID_RANDOM_RADIX).slice(ID_RANDOM_START, ID_RANDOM_START + ID_RANDOM_LENGTH)}`;
   }
 
   public generateFurnitureId(): string {
-    return `furniture-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    return `${FURNITURE_ID_PREFIX}${Date.now()}-${Math.random().toString(ID_RANDOM_RADIX).slice(ID_RANDOM_START, ID_RANDOM_START + ID_RANDOM_LENGTH)}`;
   }
 
   public createFurnitureFromBlueprint(blueprint: IFurnitureBlueprint, position: { x: number; y: number; z: number }): IPlacedFurniture {

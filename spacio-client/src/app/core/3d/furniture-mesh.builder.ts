@@ -1,17 +1,27 @@
 import * as THREE from 'three';
 import {
+  DEFAULT_FURNITURE_MATERIAL_FINISH,
+  DEFAULT_FURNITURE_SLOT_COLOR,
+  FURNITURE_BODY_NAME,
   FURNITURE_FINISH_PBR,
+  FURNITURE_GROUP_NAME,
+  FURNITURE_PART_ID_USER_DATA_KEY,
+  FURNITURE_PART_USER_DATA_TYPE,
   FURNITURE_USER_DATA_TYPE,
   IFurniturePart,
   IMaterialSlot,
+  TPartShape,
 } from '@spacio/shared-types';
 
-const DEFAULT_SLOT_COLOR: string = '#c8c8d0';
 const CYLINDER_SEGMENTS: number = 24;
 const SPHERE_WIDTH_SEGMENTS: number = 24;
 const SPHERE_HEIGHT_SEGMENTS: number = 16;
 const CAPSULE_CAP_SEGMENTS: number = 8;
 const CAPSULE_RADIAL_SEGMENTS: number = 16;
+
+const PART_SHAPE_CYLINDER: TPartShape = 'cylinder';
+const PART_SHAPE_SPHERE: TPartShape = 'sphere';
+const PART_SHAPE_CAPSULE: TPartShape = 'capsule';
 
 export interface IBuildFurnitureMeshOptions {
   ground?: boolean;
@@ -33,7 +43,7 @@ function createPartGeometry(part: IFurniturePart): { geometry: THREE.BufferGeome
   const height: number = Math.max(part.dimensions.height, 0.001);
   const depth: number = Math.max(part.dimensions.depth, 0.001);
 
-  if (part.shape === 'cylinder') {
+  if (part.shape === PART_SHAPE_CYLINDER) {
     const radius: number = width / 2;
     return {
       geometry: new THREE.CylinderGeometry(radius, radius, height, CYLINDER_SEGMENTS),
@@ -41,7 +51,7 @@ function createPartGeometry(part: IFurniturePart): { geometry: THREE.BufferGeome
     };
   }
 
-  if (part.shape === 'sphere') {
+  if (part.shape === PART_SHAPE_SPHERE) {
     const radius: number = Math.max(width, height, depth) / 2;
     return {
       geometry: new THREE.SphereGeometry(radius, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS),
@@ -49,7 +59,7 @@ function createPartGeometry(part: IFurniturePart): { geometry: THREE.BufferGeome
     };
   }
 
-  if (part.shape === 'capsule') {
+  if (part.shape === PART_SHAPE_CAPSULE) {
     const radius: number = Math.min(width, depth) / 2;
     const length: number = Math.max(0.001, height - radius * 2);
     return {
@@ -70,9 +80,9 @@ export function buildFurnitureMesh(
   options: IBuildFurnitureMeshOptions = {}
 ): THREE.Group {
   const group: THREE.Group = new THREE.Group();
-  group.name = 'furniture-mesh';
+  group.name = FURNITURE_GROUP_NAME;
   const body: THREE.Group = new THREE.Group();
-  body.name = 'furniture-body';
+  body.name = FURNITURE_BODY_NAME;
   const materialCache: Map<string, THREE.MeshStandardMaterial> = new Map<string, THREE.MeshStandardMaterial>();
 
   for (const part of parts) {
@@ -80,8 +90,8 @@ export function buildFurnitureMesh(
     if (!material) {
       const slot: IMaterialSlot = materials[part.materialSlot] ?? {
         label: part.materialSlot,
-        color: DEFAULT_SLOT_COLOR,
-        finish: 'satin',
+        color: DEFAULT_FURNITURE_SLOT_COLOR,
+        finish: DEFAULT_FURNITURE_MATERIAL_FINISH,
       };
       material = createFurnitureMaterial(slot);
       material.name = part.materialSlot;
@@ -100,7 +110,7 @@ export function buildFurnitureMesh(
     mesh.scale.copy(geometryResult.scale);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.userData = { type: 'furniture-part', partId: part.id };
+    mesh.userData = { type: FURNITURE_PART_USER_DATA_TYPE, [FURNITURE_PART_ID_USER_DATA_KEY]: part.id };
     body.add(mesh);
   }
 

@@ -12,7 +12,7 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { IFurnitureBlueprint, HtmlTag, KeyboardKey, TMaterialFinish, TPartShape } from '@spacio/shared-types';
+import { FURNITURE_PART_ID_USER_DATA_KEY, IFurnitureBlueprint, HtmlTag, KeyboardKey, TMaterialFinish, TPartShape } from '@spacio/shared-types';
 import { CraftWorkbenchService, ICraftMaterialEntry } from '../../core/services/craft-workbench.service';
 import { FurnitureCatalogService } from '../../core/services/furniture-catalog.service';
 import { WorkspaceNavComponent } from '../../shared/components/workspace-nav.component';
@@ -28,6 +28,17 @@ const STAGE_CAMERA_POSITION: THREE.Vector3 = new THREE.Vector3(2.8, 2.1, 3.0);
 const STAGE_CAMERA_TARGET: THREE.Vector3 = new THREE.Vector3(0, 0.45, 0);
 const STAGE_CLICK_THRESHOLD_PX: number = 4;
 const STAGE_RENDER_ORDER_SELECTION: number = 3;
+const CRAFT_STAGE_SELECTOR: string = '.craft-stage';
+const KEYDOWN_EVENT = 'keydown' as const;
+const POINTERDOWN_EVENT = 'pointerdown' as const;
+const POINTERUP_EVENT = 'pointerup' as const;
+const CANVAS_ELEMENT_TAG = 'canvas' as const;
+const CANVAS_CONTEXT_2D = '2d' as const;
+const LOADED_FOR_EDIT_MESSAGE: string = 'Loaded for editing — save when ready.';
+const EDIT_QUERY_PARAM: string = 'edit';
+const THUMBNAIL_SIZE: number = 256;
+const THUMBNAIL_MIME_TYPE: string = 'image/jpeg';
+const THUMBNAIL_QUALITY: number = 0.82;
 
 @Component({
   selector: 'app-craft-room',
@@ -88,19 +99,19 @@ export class CraftRoomComponent implements OnDestroy {
   private readonly _onKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void => this._handleKeyDown(event);
 
   public constructor() {
-    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener(KEYDOWN_EVENT, this._onKeyDown);
 
     effect((): void => {
       const blueprints: readonly IFurnitureBlueprint[] = this._catalog.blueprints();
       if (this._editApplied) return;
-      const editId: string | null = this._route.snapshot.queryParamMap.get('edit');
+      const editId: string | null = this._route.snapshot.queryParamMap.get(EDIT_QUERY_PARAM);
       if (!editId || blueprints.length === 0) return;
       const blueprint: IFurnitureBlueprint | undefined = blueprints.find(
         (item: IFurnitureBlueprint): boolean => item.id === editId
       );
       if (!blueprint) return;
       this._editApplied = true;
-      this._workbench.loadBlueprint(blueprint, 'Loaded for editing — save when ready.');
+      this._workbench.loadBlueprint(blueprint, LOADED_FOR_EDIT_MESSAGE);
     });
 
     effect((): void => {
@@ -123,7 +134,7 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   public ngOnDestroy(): void {
-    window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener(KEYDOWN_EVENT, this._onKeyDown);
     this._cleanup();
   }
 
@@ -241,7 +252,7 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   private _initializeStage(): void {
-    const container: HTMLElement | null = this._elementRef.nativeElement.querySelector('.craft-stage');
+    const container: HTMLElement | null = this._elementRef.nativeElement.querySelector(CRAFT_STAGE_SELECTOR);
     if (!container) return;
 
     const renderer: THREE.WebGLRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
@@ -250,8 +261,8 @@ export class CraftRoomComponent implements OnDestroy {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.domElement.addEventListener('pointerdown', this._onPointerDown);
-    renderer.domElement.addEventListener('pointerup', this._onPointerUp);
+    renderer.domElement.addEventListener(POINTERDOWN_EVENT, this._onPointerDown);
+    renderer.domElement.addEventListener(POINTERUP_EVENT, this._onPointerUp);
     container.appendChild(renderer.domElement);
     this._renderer = renderer;
 
@@ -334,7 +345,7 @@ export class CraftRoomComponent implements OnDestroy {
     group.traverse((object: THREE.Object3D): void => {
       const mesh: THREE.Mesh = object as THREE.Mesh;
       if (!mesh.isMesh) return;
-      const partId: string | undefined = mesh.userData['partId'] as string | undefined;
+      const partId: string | undefined = mesh.userData[FURNITURE_PART_ID_USER_DATA_KEY] as string | undefined;
       if (partId) this._partMeshes.set(partId, mesh);
       mesh.frustumCulled = false;
     });
@@ -378,7 +389,7 @@ export class CraftRoomComponent implements OnDestroy {
     this._raycaster.setFromCamera(this._mouse, this._camera);
     const intersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObjects(this._stageGroup.children, true);
     for (const intersection of intersections) {
-      const partId: string | undefined = intersection.object.userData['partId'] as string | undefined;
+      const partId: string | undefined = intersection.object.userData[FURNITURE_PART_ID_USER_DATA_KEY] as string | undefined;
       if (partId) {
         this._workbench.selectPart(partId);
         return;
@@ -391,16 +402,16 @@ export class CraftRoomComponent implements OnDestroy {
     if (!this._renderer || !this._scene || !this._camera) return undefined;
     this._renderer.render(this._scene, this._camera);
     const source: HTMLCanvasElement = this._renderer.domElement;
-    const thumbnail: HTMLCanvasElement = document.createElement('canvas');
-    thumbnail.width = 256;
-    thumbnail.height = 256;
-    const context: CanvasRenderingContext2D | null = thumbnail.getContext('2d');
+    const thumbnail: HTMLCanvasElement = document.createElement(CANVAS_ELEMENT_TAG);
+    thumbnail.width = THUMBNAIL_SIZE;
+    thumbnail.height = THUMBNAIL_SIZE;
+    const context: CanvasRenderingContext2D | null = thumbnail.getContext(CANVAS_CONTEXT_2D);
     if (!context) return undefined;
     const side: number = Math.min(source.width, source.height);
     const sx: number = (source.width - side) / 2;
     const sy: number = (source.height - side) / 2;
-    context.drawImage(source, sx, sy, side, side, 0, 0, 256, 256);
-    return thumbnail.toDataURL('image/jpeg', 0.82);
+    context.drawImage(source, sx, sy, side, side, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+    return thumbnail.toDataURL(THUMBNAIL_MIME_TYPE, THUMBNAIL_QUALITY);
   }
 
   private _startRenderLoop(): void {
@@ -417,7 +428,7 @@ export class CraftRoomComponent implements OnDestroy {
   private _setupResizeObserver(): void {
     const host: HTMLElement = this._elementRef.nativeElement;
     this._resizeObserver = new ResizeObserver((): void => {
-      const container: HTMLElement | null = host.querySelector('.craft-stage');
+      const container: HTMLElement | null = host.querySelector(CRAFT_STAGE_SELECTOR);
       if (!container || !this._renderer || !this._camera) return;
       const width: number = container.clientWidth;
       const height: number = container.clientHeight;
@@ -434,8 +445,8 @@ export class CraftRoomComponent implements OnDestroy {
     this._resizeObserver?.disconnect();
     if (this._renderer) {
       const canvas: HTMLCanvasElement = this._renderer.domElement;
-      canvas.removeEventListener('pointerdown', this._onPointerDown);
-      canvas.removeEventListener('pointerup', this._onPointerUp);
+      canvas.removeEventListener(POINTERDOWN_EVENT, this._onPointerDown);
+      canvas.removeEventListener(POINTERUP_EVENT, this._onPointerUp);
       canvas.parentElement?.removeChild(canvas);
       this._renderer.dispose();
       this._renderer.forceContextLoss();

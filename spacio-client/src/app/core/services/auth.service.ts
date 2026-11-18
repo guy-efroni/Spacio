@@ -9,8 +9,12 @@ import {
 } from '@spacio/shared-types';
 
 const AUTH_ENDPOINT: string = '/api/auth';
+const AUTH_LOGIN_PATH: string = '/login';
+const AUTH_REGISTER_PATH: string = '/register';
 const TOKEN_STORAGE_KEY: string = 'spacio.auth.token';
 const USER_STORAGE_KEY: string = 'spacio.auth.user';
+const AUTHORIZATION_HEADER: string = 'Authorization';
+const BEARER_PREFIX: string = 'Bearer ';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -33,7 +37,7 @@ export class AuthService {
   }
 
   public login(request: ILoginRequest): Observable<IUserProfile> {
-    return this._http.post<IAuthResponse>(`${AUTH_ENDPOINT}/login`, request).pipe(
+    return this._http.post<IAuthResponse>(`${AUTH_ENDPOINT}${AUTH_LOGIN_PATH}`, request).pipe(
       map((response: IAuthResponse): IUserProfile => {
         this._applySession(response);
         return response.user;
@@ -42,7 +46,7 @@ export class AuthService {
   }
 
   public register(request: IRegisterRequest): Observable<IUserProfile> {
-    return this._http.post<IAuthResponse>(`${AUTH_ENDPOINT}/register`, request).pipe(
+    return this._http.post<IAuthResponse>(`${AUTH_ENDPOINT}${AUTH_REGISTER_PATH}`, request).pipe(
       map((response: IAuthResponse): IUserProfile => {
         this._applySession(response);
         return response.user;
@@ -63,7 +67,7 @@ export class AuthService {
 
   public authorizationHeaders(): HttpHeaders {
     const token: string | null = this._token();
-    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+    return token ? new HttpHeaders({ [AUTHORIZATION_HEADER]: `${BEARER_PREFIX}${token}` }) : new HttpHeaders();
   }
 
   private _applySession(response: IAuthResponse): void {
