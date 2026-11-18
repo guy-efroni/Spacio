@@ -11,7 +11,7 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { IFurnitureBlueprint, TMaterialFinish, TPartShape } from '@spacio/shared-types';
+import { IFurnitureBlueprint, HtmlTag, KeyboardKey, TMaterialFinish, TPartShape } from '@spacio/shared-types';
 import { CraftWorkbenchService, ICraftMaterialEntry } from '../../core/services/craft-workbench.service';
 import { FurnitureCatalogService } from '../../core/services/furniture-catalog.service';
 import { WorkspaceNavComponent } from '../../shared/components/workspace-nav.component';
@@ -79,8 +79,11 @@ export class CraftRoomComponent implements OnDestroy {
     this._pointerDownPosition = { x: event.clientX, y: event.clientY };
   };
   private readonly _onPointerUp: (event: PointerEvent) => void = (event: PointerEvent): void => this._handlePointerUp(event);
+  private readonly _onKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void => this._handleKeyDown(event);
 
   public constructor() {
+    window.addEventListener('keydown', this._onKeyDown);
+
     effect((): void => {
       const blueprints: readonly IFurnitureBlueprint[] = this._catalog.blueprints();
       if (this._editApplied) return;
@@ -114,6 +117,7 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   public ngOnDestroy(): void {
+    window.removeEventListener('keydown', this._onKeyDown);
     this._cleanup();
   }
 
@@ -130,7 +134,11 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   public onDeletePart(id: string): void {
-    this._workbench.deletePart(id);
+    this._workbench.removePart(id);
+  }
+
+  public onDeleteSelectedPart(): void {
+    this._workbench.deleteSelectedPart();
   }
 
   public onSelectPart(id: string): void {
@@ -206,6 +214,24 @@ export class CraftRoomComponent implements OnDestroy {
   private _numberFromEvent(event: Event): number {
     const target: HTMLInputElement = event.target as HTMLInputElement;
     return target.valueAsNumber;
+  }
+
+  private _handleKeyDown(event: KeyboardEvent): void {
+    if (this._isEditableTarget(event.target)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    const key: string = event.key.toLowerCase();
+    if (key !== KeyboardKey.Delete && key !== KeyboardKey.Backspace) return;
+    if (!this._workbench.selectedPartId()) return;
+
+    event.preventDefault();
+    this._workbench.deleteSelectedPart();
+  }
+
+  private _isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName: string = target.tagName;
+    return tagName === HtmlTag.Input || tagName === HtmlTag.TextArea || tagName === HtmlTag.Select || target.isContentEditable;
   }
 
   private _initializeStage(): void {

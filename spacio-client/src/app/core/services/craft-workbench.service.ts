@@ -168,12 +168,24 @@ export class CraftWorkbenchService {
     this._saveMessage.set(mirrorX || mirrorZ ? 'Duplicated with mirror.' : 'Duplicated part.');
   }
 
-  public deletePart(id: string): void {
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
-      ...blueprint,
-      parts: blueprint.parts.filter((part: IFurniturePart): boolean => part.id !== id),
+  public deleteSelectedPart(): void {
+    const id: string | null = this._selectedPartId();
+    if (!id) return;
+    this.removePart(id);
+  }
+
+  public removePart(id: string): void {
+    const blueprint: IFurnitureBlueprint = this._draft();
+    if (!blueprint.parts.some((part: IFurniturePart): boolean => part.id === id)) return;
+    this._mutateDraft((current: IFurnitureBlueprint): IFurnitureBlueprint => ({
+      ...current,
+      parts: current.parts.filter((part: IFurniturePart): boolean => part.id !== id),
     }));
     if (this._selectedPartId() === id) this._selectedPartId.set(null);
+  }
+
+  public deletePart(id: string): void {
+    this.removePart(id);
   }
 
   public selectPart(id: string): void {

@@ -71,7 +71,17 @@
 
     <aside class="craft-panel craft-panel--right">
       <div class="craft-panel__section">
-        <span class="craft-panel__label">Part Inspector</span>
+        <div class="craft-panel__section-header">
+          <span class="craft-panel__label">Part Inspector</span>
+          <button
+            type="button"
+            class="craft-panel__mini craft-panel__mini--danger"
+            [disabled]="!selectedPartId()"
+            (click)="onDeleteSelectedPart()"
+            title="Delete selected part"
+            aria-label="Delete selected part"
+          >Delete Part</button>
+        </div>
         @if (selectedPart(); as part) {
           <label class="craft-field"><span>Name</span>
             <input type="text" class="craft-field__input" [value]="part.name" (input)="onPartNameChange($event)" />
