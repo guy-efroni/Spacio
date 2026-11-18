@@ -109,9 +109,10 @@ import {
   ViewportToolMode,
   getBlueprintBounds,
 } from '@spacio/shared-types';
+import { buildFurnitureMesh, disposeFurnitureGroup } from '../../core/3d/furniture-mesh.builder';
 import { FloorplanService } from '../../core/services/floorplan.service';
+import { FurnitureCatalogService } from '../../core/services/furniture-catalog.service';
 import { WallExtruder } from '../../shared/utils/wall-extruder.util';
-import { IGeneratedFurniture, buildParametricFurniture } from '../../shared/utils/parametric-generator.util';
 
 const DEFAULT_INITIAL_WIDTH: number = typeof window !== 'undefined' ? window.innerWidth : 0;
 const DEFAULT_INITIAL_HEIGHT: number = typeof window !== 'undefined' ? window.innerHeight : 0;
@@ -135,11 +136,14 @@ interface IFurnitureFootprint {
   dispose: () => void;
 }
 
+interface IFurnitureInstance {
+  group: THREE.Group;
+  dispose: () => void;
+}
+
 interface IFurnitureGhost {
-  generated: IGeneratedFurniture;
-  clonedMaterials: THREE.MeshStandardMaterial[];
+  group: THREE.Group;
   footprint: IFurnitureFootprint;
-  baseY: number;
   dispose: () => void;
 }
 
@@ -154,6 +158,7 @@ export class ViewportComponent implements OnDestroy {
   private readonly _elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly _ngZone: NgZone = inject(NgZone);
   protected readonly floorplanService: FloorplanService = inject(FloorplanService);
+  private readonly _catalog: FurnitureCatalogService = inject(FurnitureCatalogService);
 
   protected readonly isDrawingMode: WritableSignal<boolean> = signal<boolean>(false);
   protected readonly isRulerMode: WritableSignal<boolean> = signal<boolean>(false);
@@ -172,7 +177,7 @@ export class ViewportComponent implements OnDestroy {
   private readonly _wallsGroup: THREE.Group = new THREE.Group();
   private readonly _floorsGroup: THREE.Group = new THREE.Group();
   private readonly _furnitureGroup: THREE.Group = new THREE.Group();
-  private readonly _furnitureInstances: Map<string, IGeneratedFurniture> = new Map<string, IGeneratedFurniture>();
+  private readonly _furnitureInstances: Map<string, IFurnitureInstance> = new Map<string, IFurnitureInstance>();
   private readonly _furnitureSelectionOutlines: Map<string, THREE.BoxHelper> = new Map<string, THREE.BoxHelper>();
 
   private _floorMesh?: THREE.Mesh;
@@ -242,6 +247,7 @@ export class ViewportComponent implements OnDestroy {
     });
 
     effect((): void => {
+      this._catalog.blueprints();
       const furniture: readonly IPlacedFurniture[] = this.floorplanService.furniture();
       const selectedId: string | null = this.floorplanService.selectedFurnitureId();
       if (!this._scene) return;
@@ -616,7 +622,7 @@ export class ViewportComponent implements OnDestroy {
     if (!point) return;
 
     const item: IPlacedFurniture = this.floorplanService.createFurnitureFromBlueprint(blueprint, { x: point.x, y: 0, z: point.y });
-    item.rotation.y = THREE.MathUtils.radToDeg(this._pendingFurnitureRotationY);
+    item.rotationY = this._pendingFurnitureRotationY;
 
     this.floorplanService.addFurniture(item);
     this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
@@ -1077,7 +1083,7 @@ export class ViewportComponent implements OnDestroy {
   private _syncFurniture(furniture: ReadonlyArray<IPlacedFurniture>, selectedId: string | null): void {
     if (!this._furnitureGroup) return;
     this._disposeFurnitureSelectionOutlines();
-    for (const [, instance] of this._furnitureInstances.entries()) {
+    for (const instance of this._furnitureInstances.values()) {
       this._furnitureGroup.remove(instance.group);
       instance.dispose();
     }
@@ -1085,16 +1091,34 @@ export class ViewportComponent implements OnDestroy {
     this._furnitureGroup.clear();
 
     for (const item of furniture) {
-      const generated: IGeneratedFurniture = buildParametricFurniture(item);
-      generated.group.position.set(item.position.x, this._getFurniturePlacementY(), item.position.z);
-      generated.group.visible = true;
-      generated.group.renderOrder = 1;
-      this._furnitureGroup.add(generated.group);
-      this._furnitureInstances.set(item.id, generated);
-      if (item.id === selectedId) {
-        this._addFurnitureSelectionOutline(generated.group, item.id);
+      const instance: IFurnitureInstance | null = this._buildFurnitureInstance(item);
+      if (!instance) continue;
+      instance.group.position.set(item.position.x, this._getFurniturePlacementY(), item.position.z);
+      instance.group.rotation.y = item.rotationY;
+      instance.group.scale.set(item.scale.x, item.scale.y, item.scale.z);
+      instance.group.visible = true;
+      instance.group.renderOrder = 1;
+      instance.group.userData = { ...instance.group.userData, id: item.instanceId };
+      this._furnitureGroup.add(instance.group);
+      this._furnitureInstances.set(item.instanceId, instance);
+      if (item.instanceId === selectedId) {
+        this._addFurnitureSelectionOutline(instance.group, item.instanceId);
       }
     }
+  }
+
+  private _buildFurnitureInstance(item: IPlacedFurniture): IFurnitureInstance | null {
+    const blueprint: IFurnitureBlueprint | undefined = this._catalog.getById(item.blueprintId);
+    if (!blueprint) return null;
+    const materials: Record<string, import('@spacio/shared-types').IMaterialSlot> = {
+      ...blueprint.materials,
+      ...(item.materialOverrides ?? {}),
+    };
+    const group: THREE.Group = buildFurnitureMesh(blueprint.parts, materials, { ground: true });
+    return {
+      group,
+      dispose: (): void => disposeFurnitureGroup(group),
+    };
   }
 
   private _disposeFurnitureSelectionOutlines(): void {
@@ -1129,55 +1153,49 @@ export class ViewportComponent implements OnDestroy {
     if (!this._furnitureGhost) {
       const posX: number = point?.x ?? 0;
       const posZ: number = point?.y ?? 0;
-      const temp: IPlacedFurniture = this.floorplanService.createFurnitureFromBlueprint(blueprint, { x: posX, y: 0, z: posZ });
-      temp.rotation.y = THREE.MathUtils.radToDeg(this._pendingFurnitureRotationY);
-      const generated: IGeneratedFurniture = buildParametricFurniture(temp);
-      const clonedMaterials: THREE.MeshStandardMaterial[] = this._applyGhostMaterials(generated);
-      const bounds: { width: number; height: number; depth: number } = getBlueprintBounds(temp.parts);
+      const group: THREE.Group = buildFurnitureMesh(blueprint.parts, blueprint.materials, { ground: true });
+      this._applyGhostMaterials(group);
+      const bounds: { width: number; height: number; depth: number } = getBlueprintBounds(blueprint.parts);
       const footprint: IFurnitureFootprint = this._createFurnitureFootprint(bounds.width, bounds.depth);
-      const baseY: number = generated.group.position.y;
       const placementY: number = point?.placementY ?? this._getFurniturePlacementY();
       const ghostRotation: number = this._pendingFurnitureRotationY;
 
-      generated.group.position.set(posX, placementY + baseY, posZ);
-      generated.group.rotation.y = ghostRotation;
-      generated.group.renderOrder = FURNITURE_GHOST_RENDER_ORDER;
-      generated.group.visible = true;
+      group.position.set(posX, placementY, posZ);
+      group.rotation.y = ghostRotation;
+      group.renderOrder = FURNITURE_GHOST_RENDER_ORDER;
+      group.visible = true;
       footprint.group.position.set(posX, this._floorTopY, posZ);
       footprint.group.rotation.y = ghostRotation;
 
       this._furnitureGhost = {
-        generated,
-        clonedMaterials,
+        group,
         footprint,
-        baseY,
         dispose: (): void => {
           footprint.dispose();
-          clonedMaterials.forEach((material: THREE.MeshStandardMaterial): void => material.dispose());
-          generated.dispose();
+          disposeFurnitureGroup(group);
         },
       };
 
-      this._scene.add(generated.group);
+      this._scene.add(group);
       this._scene.add(footprint.group);
       return;
     }
 
     const ghost: IFurnitureGhost = this._furnitureGhost;
-    ghost.generated.group.rotation.y = this._pendingFurnitureRotationY;
+    ghost.group.rotation.y = this._pendingFurnitureRotationY;
     ghost.footprint.group.rotation.y = this._pendingFurnitureRotationY;
     if (point) {
-      ghost.generated.group.position.set(point.x, point.placementY + ghost.baseY, point.y);
+      ghost.group.position.set(point.x, point.placementY, point.y);
       ghost.footprint.group.position.set(point.x, this._floorTopY, point.y);
     }
   }
 
-  private _applyGhostMaterials(generated: IGeneratedFurniture): THREE.MeshStandardMaterial[] {
+  private _applyGhostMaterials(group: THREE.Group): THREE.MeshStandardMaterial[] {
     const materialCache: Map<THREE.Material, THREE.MeshStandardMaterial> = new Map<THREE.Material, THREE.MeshStandardMaterial>();
     const sourceMaterials: Set<THREE.Material> = new Set<THREE.Material>();
     const clonedMaterials: THREE.MeshStandardMaterial[] = [];
 
-    generated.group.traverse((obj: THREE.Object3D): void => {
+    group.traverse((obj: THREE.Object3D): void => {
       const mesh: THREE.Mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
       const originalMaterial: THREE.Material | THREE.Material[] | undefined = mesh.material as THREE.Material | THREE.Material[] | undefined;
@@ -1265,7 +1283,7 @@ export class ViewportComponent implements OnDestroy {
   private _removeFurnitureGhost(): void {
     if (!this._furnitureGhost) return;
     if (this._scene) {
-      this._scene.remove(this._furnitureGhost.generated.group);
+      this._scene.remove(this._furnitureGhost.group);
       this._scene.remove(this._furnitureGhost.footprint.group);
     }
     this._furnitureGhost.dispose();
@@ -1274,7 +1292,7 @@ export class ViewportComponent implements OnDestroy {
 
   private _syncGhostElevation(): void {
     if (!this._furnitureGhost) return;
-    this._furnitureGhost.generated.group.position.y = this._getFurniturePlacementY() + this._furnitureGhost.baseY;
+    this._furnitureGhost.group.position.y = this._getFurniturePlacementY();
     this._furnitureGhost.footprint.group.position.y = this._floorTopY;
   }
 

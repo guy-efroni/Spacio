@@ -133,7 +133,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 18V9m16 9V9M2 9h20M4 14h16M6 18v2m12-2v2" /></svg>
         </span>
         <div class="inspector-panel__title-text">
-          <h2 class="inspector-panel__title">{{ item.name }}</h2>
+          <h2 class="inspector-panel__title">{{ item.blueprintName }}</h2>
           <p class="inspector-panel__subtitle">#{{ furnitureIdSuffix() }}</p>
         </div>
       </div>
@@ -145,7 +145,7 @@
         <div class="inspector-panel__section">
           <label class="inspector-panel__control-label">Transform</label>
           <label class="inspector-panel__field"><span class="inspector-panel__field-label">Rotation Y (°)</span>
-            <input type="number" class="inspector-panel__input" [value]="formatNum(item.rotation.y)" step="15" (change)="onFurnitureRotationChange($any($event.target).valueAsNumber)" />
+            <input type="number" class="inspector-panel__input" [value]="furnitureRotationDegrees(item)" step="15" (change)="onFurnitureRotationChange($any($event.target).valueAsNumber)" />
           </label>
           <div class="inspector-panel__scale-grid">
             <label class="inspector-panel__field"><span class="inspector-panel__field-label">Scale X</span>

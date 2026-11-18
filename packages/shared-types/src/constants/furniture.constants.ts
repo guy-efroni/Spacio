@@ -5,6 +5,7 @@ import { IFurniturePart, TPartShape } from '../furniture/furniture-part.interfac
 import { IMaterialSlot, TMaterialFinish } from '../furniture/material-slot.interface';
 import { IParametricFurniture, ParametricFurnitureCategory } from '../furniture/parametric-furniture.interface';
 import { IPlacedFurniture } from '../furniture/placed-furniture.interface';
+import { IWallMaterialSlot } from '../furniture/wall-material-slot.interface';
 
 export const FURNITURE_MESH_PREFIX = 'furniture';
 export const FURNITURE_USER_DATA_TYPE = 'furniture';
@@ -59,21 +60,16 @@ export function inferMaterialFinish(roughness: number, metalness: number): TMate
   return 'satin';
 }
 
-export function createMaterialSlot(key: string, label: string, color: string, roughness: number, metalness: number): IMaterialSlot {
+export function createMaterialSlot(key: string, label: string, color: string, roughness: number, metalness: number): IWallMaterialSlot {
   return { key, label, color, finish: inferMaterialFinish(roughness, metalness), roughness, metalness };
 }
 
 export function createFurnitureMaterialSlot(label: string, color: string, finish: TMaterialFinish): IMaterialSlot {
-  const pbr: { roughness: number; metalness: number } = FURNITURE_FINISH_PBR[finish];
-  return { label, color, finish, roughness: pbr.roughness, metalness: pbr.metalness };
+  return { label, color, finish };
 }
 
 export function getMaterialPbr(slot: IMaterialSlot): { roughness: number; metalness: number } {
-  const preset: { roughness: number; metalness: number } = FURNITURE_FINISH_PBR[slot.finish];
-  return {
-    roughness: Math.min(Math.max(slot.roughness ?? preset.roughness, 0), 1),
-    metalness: Math.min(Math.max(slot.metalness ?? preset.metalness, 0), 1),
-  };
+  return FURNITURE_FINISH_PBR[slot.finish];
 }
 
 export function createFurniturePart(
@@ -188,6 +184,7 @@ function buildBookshelfParts(): IFurniturePart[] {
 export const FURNITURE_PRESETS: readonly IFurnitureBlueprint[] = [
   {
     id: 'preset-dining-table',
+    userId: null,
     name: 'Dining Table',
     category: 'tables',
     isPreset: true,
@@ -199,6 +196,7 @@ export const FURNITURE_PRESETS: readonly IFurnitureBlueprint[] = [
   },
   {
     id: 'preset-coffee-table',
+    userId: null,
     name: 'Coffee Table',
     category: 'tables',
     isPreset: true,
@@ -210,6 +208,7 @@ export const FURNITURE_PRESETS: readonly IFurnitureBlueprint[] = [
   },
   {
     id: 'preset-sofa',
+    userId: null,
     name: 'Sofa',
     category: 'seating',
     isPreset: true,
@@ -221,6 +220,7 @@ export const FURNITURE_PRESETS: readonly IFurnitureBlueprint[] = [
   },
   {
     id: 'preset-bed',
+    userId: null,
     name: 'Bed',
     category: 'beds',
     isPreset: true,
@@ -232,6 +232,7 @@ export const FURNITURE_PRESETS: readonly IFurnitureBlueprint[] = [
   },
   {
     id: 'preset-bookshelf',
+    userId: null,
     name: 'Bookshelf',
     category: 'storage',
     isPreset: true,
@@ -246,6 +247,7 @@ export const FURNITURE_PRESETS: readonly IFurnitureBlueprint[] = [
 export function cloneBlueprint(blueprint: IFurnitureBlueprint, id: string = blueprint.id): IFurnitureBlueprint {
   return {
     id,
+    userId: null,
     name: blueprint.name,
     category: blueprint.category,
     isPreset: false,
@@ -265,6 +267,7 @@ export function cloneBlueprint(blueprint: IFurnitureBlueprint, id: string = blue
 export function createBlankBlueprint(id: string): IFurnitureBlueprint {
   return {
     id,
+    userId: null,
     name: 'Untitled Piece',
     category: 'decor',
     isPreset: false,
@@ -277,19 +280,16 @@ export function createBlankBlueprint(id: string): IFurnitureBlueprint {
 
 export function createPlacedFurnitureFromBlueprint(
   blueprint: IFurnitureBlueprint,
-  id: string,
+  instanceId: string,
   position: IVector3D
 ): IPlacedFurniture {
-  const clone: IFurnitureBlueprint = cloneBlueprint(blueprint, blueprint.id);
   return {
-    id,
+    instanceId,
     blueprintId: blueprint.id,
-    name: blueprint.name,
-    parts: clone.parts,
-    materials: clone.materials,
-    scale: { ...DEFAULT_FURNITURE_SCALE },
+    blueprintName: blueprint.name,
     position: { ...position },
-    rotation: { ...DEFAULT_FURNITURE_ROTATION },
+    rotationY: 0,
+    scale: { ...DEFAULT_FURNITURE_SCALE },
   };
 }
 

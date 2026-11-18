@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import type {
@@ -10,9 +11,13 @@ import type {
 } from '../interfaces/furniture-blueprint.interface';
 
 @Entity('furniture_blueprints')
+@Index('UQ_furniture_blueprint_user_name', ['userId', 'name'], { unique: true })
 export class FurnitureBlueprintEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'user_id', type: 'uuid', nullable: true })
+  userId: string | null;
 
   @Column({ type: 'varchar' })
   name: string;

@@ -4,32 +4,18 @@ import {
   NgZone,
   OnDestroy,
   Signal,
-  WritableSignal,
   afterNextRender,
-  computed,
   effect,
   inject,
-  signal,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import {
-  FURNITURE_CATEGORY_OPTIONS,
-  IFurnitureBlueprint,
-  IFurniturePart,
-  IMaterialSlot,
-  MATERIAL_FINISH_OPTIONS,
-  PART_SHAPE_OPTIONS,
-  TMaterialFinish,
-  TFurnitureCategory,
-  TPartShape,
-  createFurnitureMaterialSlot,
-  createFurniturePart,
-} from '@spacio/shared-types';
-import { BlueprintService } from '../../core/services/blueprint.service';
+import { IFurnitureBlueprint, TMaterialFinish, TPartShape } from '@spacio/shared-types';
+import { CraftWorkbenchService, ICraftMaterialEntry } from '../../core/services/craft-workbench.service';
+import { FurnitureCatalogService } from '../../core/services/furniture-catalog.service';
 import { WorkspaceNavComponent } from '../../shared/components/workspace-nav.component';
-import { buildFurnitureGroupFromBlueprint, disposeObject3D } from '../../shared/utils/furniture-blueprint-mesh.util';
+import { buildFurnitureMesh, disposeFurnitureGroup } from '../../core/3d/furniture-mesh.builder';
 
 const STAGE_BACKGROUND: number = 0x141418;
 const STAGE_FLOOR_COLOR: number = 0x1b1b22;
@@ -42,15 +28,11 @@ const STAGE_CAMERA_TARGET: THREE.Vector3 = new THREE.Vector3(0, 0.45, 0);
 const STAGE_CLICK_THRESHOLD_PX: number = 4;
 const STAGE_RENDER_ORDER_SELECTION: number = 3;
 
-interface ICraftMaterialEntry {
-  key: string;
-  slot: IMaterialSlot;
-}
-
 @Component({
   selector: 'app-craft-room',
   standalone: true,
   imports: [WorkspaceNavComponent],
+  providers: [CraftWorkbenchService],
   templateUrl: './craft-room.component.html',
   styleUrl: './craft-room.component.scss',
 })
@@ -58,40 +40,25 @@ export class CraftRoomComponent implements OnDestroy {
   private readonly _elementRef: ElementRef<HTMLElement> = inject(ElementRef);
   private readonly _ngZone: NgZone = inject(NgZone);
   private readonly _route: ActivatedRoute = inject(ActivatedRoute);
-  private readonly _blueprintService: BlueprintService = inject(BlueprintService);
+  private readonly _catalog: FurnitureCatalogService = inject(FurnitureCatalogService);
+  private readonly _workbench: CraftWorkbenchService = inject(CraftWorkbenchService);
 
-  private readonly _draft: WritableSignal<IFurnitureBlueprint> = signal<IFurnitureBlueprint>(this._blueprintService.createBlankDraft());
-  private readonly _selectedPartId: WritableSignal<string | null> = signal<string | null>(null);
-  private readonly _blueprintName: WritableSignal<string> = signal<string>('Untitled Piece');
-  private readonly _blueprintCategory: WritableSignal<TFurnitureCategory> = signal<TFurnitureCategory>('decor');
-  private readonly _saveMessage: WritableSignal<string> = signal<string>('');
-  private readonly _isSaving: WritableSignal<boolean> = signal<boolean>(false);
-  private readonly _mirrorX: WritableSignal<boolean> = signal<boolean>(false);
-  private readonly _mirrorZ: WritableSignal<boolean> = signal<boolean>(false);
+  public readonly draft: Signal<IFurnitureBlueprint> = this._workbench.draft;
+  public readonly selectedPartId: Signal<string | null> = this._workbench.selectedPartId;
+  public readonly blueprintName: Signal<string> = this._workbench.blueprintName;
+  public readonly blueprintCategory: Signal<IFurnitureBlueprint['category']> = this._workbench.blueprintCategory;
+  public readonly saveMessage: Signal<string> = this._workbench.saveMessage;
+  public readonly isSaving: Signal<boolean> = this._workbench.isSaving;
+  public readonly mirrorX: Signal<boolean> = this._workbench.mirrorX;
+  public readonly mirrorZ: Signal<boolean> = this._workbench.mirrorZ;
 
-  public readonly draft: Signal<IFurnitureBlueprint> = this._draft.asReadonly();
-  public readonly selectedPartId: Signal<string | null> = this._selectedPartId.asReadonly();
-  public readonly blueprintName: Signal<string> = this._blueprintName.asReadonly();
-  public readonly blueprintCategory: Signal<TFurnitureCategory> = this._blueprintCategory.asReadonly();
-  public readonly saveMessage: Signal<string> = this._saveMessage.asReadonly();
-  public readonly isSaving: Signal<boolean> = this._isSaving.asReadonly();
-  public readonly mirrorX: Signal<boolean> = this._mirrorX.asReadonly();
-  public readonly mirrorZ: Signal<boolean> = this._mirrorZ.asReadonly();
+  public readonly blueprints: Signal<readonly IFurnitureBlueprint[]> = this._catalog.blueprints;
+  public readonly partShapes: readonly TPartShape[] = this._workbench.partShapes;
+  public readonly finishOptions = this._workbench.finishOptions;
+  public readonly categoryOptions = this._workbench.categoryOptions;
 
-  public readonly blueprints: Signal<readonly IFurnitureBlueprint[]> = this._blueprintService.blueprints;
-  public readonly partShapes: readonly TPartShape[] = PART_SHAPE_OPTIONS;
-  public readonly finishOptions: readonly TMaterialFinish[] = MATERIAL_FINISH_OPTIONS;
-  public readonly categoryOptions: readonly TFurnitureCategory[] = FURNITURE_CATEGORY_OPTIONS;
-
-  public readonly selectedPart: Signal<IFurniturePart | null> = computed<IFurniturePart | null>(() => {
-    const id: string | null = this._selectedPartId();
-    if (!id) return null;
-    return this._draft().parts.find((part: IFurniturePart) => part.id === id) ?? null;
-  });
-
-  public readonly materialEntries: Signal<readonly ICraftMaterialEntry[]> = computed<readonly ICraftMaterialEntry[]>(() =>
-    Object.entries(this._draft().materials).map(([key, slot]: [string, IMaterialSlot]) => ({ key, slot }))
-  );
+  public readonly selectedPart = this._workbench.selectedPart;
+  public readonly materialEntries: Signal<readonly ICraftMaterialEntry[]> = this._workbench.materialEntries;
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -114,29 +81,26 @@ export class CraftRoomComponent implements OnDestroy {
   private readonly _onPointerUp: (event: PointerEvent) => void = (event: PointerEvent): void => this._handlePointerUp(event);
 
   public constructor() {
-    this._blueprintService.load();
-
     effect((): void => {
-      const blueprints: readonly IFurnitureBlueprint[] = this._blueprintService.blueprints();
+      const blueprints: readonly IFurnitureBlueprint[] = this._catalog.blueprints();
       if (this._editApplied) return;
       const editId: string | null = this._route.snapshot.queryParamMap.get('edit');
-      const source: IFurnitureBlueprint | null = this._blueprintService.peekEditSource();
-      if (!source && (!editId || blueprints.length === 0)) return;
-      const blueprint: IFurnitureBlueprint | null = source ?? blueprints.find((item: IFurnitureBlueprint) => item.id === editId) ?? null;
+      if (!editId || blueprints.length === 0) return;
+      const blueprint: IFurnitureBlueprint | undefined = blueprints.find(
+        (item: IFurnitureBlueprint): boolean => item.id === editId
+      );
       if (!blueprint) return;
       this._editApplied = true;
-      this._applyBlueprint(blueprint, `${blueprint.name} Edited`);
-      this._blueprintService.clearEditSource();
-      this._saveMessage.set('Editing a copy — save to add it to your catalog.');
+      this._workbench.loadBlueprint(blueprint, 'Loaded for editing — save when ready.');
     });
 
     effect((): void => {
-      this._draft();
+      this._workbench.draft();
       if (this._scene) this._rebuildStage();
     });
 
     effect((): void => {
-      this._selectedPartId();
+      this._workbench.selectedPartId();
       if (this._scene) this._updateSelectionOutline();
     });
 
@@ -154,224 +118,84 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   public onSelectPreset(event: Event): void {
-    const id: string = this._valueFromEvent(event);
-    if (id === 'blank') {
-      const blank: IFurnitureBlueprint = this._blueprintService.createBlankDraft();
-      this._applyBlueprint(blank, blank.name);
-      this._saveMessage.set('Blank piece started.');
-      return;
-    }
-    const blueprint: IFurnitureBlueprint | undefined = this._blueprintService.blueprints().find((item: IFurnitureBlueprint) => item.id === id);
-    if (!blueprint) return;
-    const draft: IFurnitureBlueprint = this._blueprintService.cloneAsDraft(blueprint);
-    this._applyBlueprint(draft, draft.name);
-    this._saveMessage.set(`Cloned “${blueprint.name}”.`);
+    this._workbench.selectBlueprint(this._valueFromEvent(event));
   }
 
   public onAddPart(shape: TPartShape): void {
-    const sizes: Record<TPartShape, { width: number; height: number; depth: number }> = {
-      box: { width: 0.4, height: 0.4, depth: 0.4 },
-      cylinder: { width: 0.2, height: 0.6, depth: 0.2 },
-      sphere: { width: 0.4, height: 0.4, depth: 0.4 },
-      capsule: { width: 0.2, height: 0.6, depth: 0.2 },
-    };
-    const dimensions: { width: number; height: number; depth: number } = sizes[shape];
-    const index: number = this._draft().parts.length;
-    const materialSlot: string = Object.keys(this._draft().materials)[0] ?? 'material-1';
-    const part: IFurniturePart = createFurniturePart(
-      this._blueprintService.generateId(),
-      `${this._toTitleCase(shape)} ${index + 1}`,
-      shape,
-      dimensions,
-      { x: (index % 3) * 0.5 - 0.5, y: dimensions.height / 2, z: 0 },
-      materialSlot
-    );
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({ ...blueprint, parts: [...blueprint.parts, part] }));
-    this._selectedPartId.set(part.id);
-    this._saveMessage.set(`Added ${part.name}.`);
+    this._workbench.addPart(shape);
   }
 
   public onDuplicatePart(): void {
-    const part: IFurniturePart | null = this.selectedPart();
-    if (!part) return;
-    const mirrorX: boolean = this._mirrorX();
-    const mirrorZ: boolean = this._mirrorZ();
-    const copy: IFurniturePart = {
-      ...part,
-      id: this._blueprintService.generateId(),
-      name: `${part.name} Copy`,
-      dimensions: { ...part.dimensions },
-      position: {
-        x: mirrorX ? -part.position.x : part.position.x + part.dimensions.width,
-        y: part.position.y,
-        z: mirrorZ ? -part.position.z : part.position.z,
-      },
-      rotation: { ...part.rotation, y: mirrorX || mirrorZ ? -part.rotation.y : part.rotation.y },
-    };
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({ ...blueprint, parts: [...blueprint.parts, copy] }));
-    this._selectedPartId.set(copy.id);
-    this._saveMessage.set(mirrorX || mirrorZ ? 'Duplicated with mirror.' : 'Duplicated part.');
+    this._workbench.duplicateSelectedPart();
   }
 
   public onDeletePart(id: string): void {
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
-      ...blueprint,
-      parts: blueprint.parts.filter((part: IFurniturePart) => part.id !== id),
-    }));
-    if (this._selectedPartId() === id) this._selectedPartId.set(null);
+    this._workbench.deletePart(id);
   }
 
   public onSelectPart(id: string): void {
-    this._selectedPartId.set(id);
+    this._workbench.selectPart(id);
   }
 
   public onPartNameChange(event: Event): void {
-    const name: string = this._valueFromEvent(event);
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, name }));
+    this._workbench.updatePartName(this._valueFromEvent(event));
   }
 
   public onPartDimensionChange(field: 'width' | 'height' | 'depth', event: Event): void {
-    const value: number = this._numberFromEvent(event);
-    if (!Number.isFinite(value) || value <= 0) return;
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
-      ...part,
-      dimensions: { ...part.dimensions, [field]: value },
-    }));
+    this._workbench.updatePartDimension(field, this._numberFromEvent(event));
   }
 
   public onPartPositionChange(axis: 'x' | 'y' | 'z', event: Event): void {
-    const value: number = this._numberFromEvent(event);
-    if (!Number.isFinite(value)) return;
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
-      ...part,
-      position: { ...part.position, [axis]: value },
-    }));
+    this._workbench.updatePartPosition(axis, this._numberFromEvent(event));
   }
 
   public onPartRotationChange(axis: 'x' | 'y' | 'z', event: Event): void {
-    const value: number = this._numberFromEvent(event);
-    if (!Number.isFinite(value)) return;
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
-      ...part,
-      rotation: { ...part.rotation, [axis]: value },
-    }));
+    this._workbench.updatePartRotation(axis, this._numberFromEvent(event));
   }
 
   public onPartMaterialSlotChange(event: Event): void {
-    const materialSlot: string = this._valueFromEvent(event);
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, materialSlot }));
+    this._workbench.updatePartMaterialSlot(this._valueFromEvent(event));
   }
 
   public onToggleMirror(axis: 'x' | 'z'): void {
-    if (axis === 'x') this._mirrorX.update((value: boolean) => !value);
-    else this._mirrorZ.update((value: boolean) => !value);
+    this._workbench.toggleMirror(axis);
   }
 
   public onBlueprintNameChange(event: Event): void {
-    this._blueprintName.set(this._valueFromEvent(event));
+    this._workbench.setName(this._valueFromEvent(event));
   }
 
   public onBlueprintCategoryChange(event: Event): void {
-    const category: TFurnitureCategory = this._valueFromEvent(event) as TFurnitureCategory;
-    this._blueprintCategory.set(category);
+    this._workbench.setCategory(this._valueFromEvent(event) as IFurnitureBlueprint['category']);
   }
 
   public onAddMaterialSlot(): void {
-    const index: number = Object.keys(this._draft().materials).length + 1;
-    const key: string = `material-${index}-${this._blueprintService.generateId().slice(0, 4)}`;
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
-      ...blueprint,
-      materials: { ...blueprint.materials, [key]: createFurnitureMaterialSlot(`Material ${index}`, '#8b5a2b', 'satin') },
-    }));
+    this._workbench.addMaterialSlot();
   }
 
   public onRemoveMaterialSlot(key: string): void {
-    const remaining: [string, IMaterialSlot][] = Object.entries(this._draft().materials).filter(([slotKey]: [string, IMaterialSlot]) => slotKey !== key);
-    if (remaining.length === 0) return;
-    const fallbackKey: string = remaining[0][0];
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
-      ...blueprint,
-      parts: blueprint.parts.map((part: IFurniturePart) =>
-        part.materialSlot === key ? { ...part, materialSlot: fallbackKey } : part
-      ),
-      materials: Object.fromEntries(remaining),
-    }));
+    this._workbench.removeMaterialSlot(key);
   }
 
   public onMaterialLabelChange(key: string, event: Event): void {
-    this._updateMaterial(key, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, label: this._valueFromEvent(event) }));
+    this._workbench.updateMaterialLabel(key, this._valueFromEvent(event));
   }
 
   public onMaterialColorChange(key: string, event: Event): void {
-    this._updateMaterial(key, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, color: this._valueFromEvent(event) }));
+    this._workbench.updateMaterialColor(key, this._valueFromEvent(event));
   }
 
   public onMaterialFinishChange(key: string, event: Event): void {
-    const finish: TMaterialFinish = this._valueFromEvent(event) as TMaterialFinish;
-    this._updateMaterial(key, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, finish }));
+    this._workbench.updateMaterialFinish(key, this._valueFromEvent(event) as TMaterialFinish);
   }
 
   public onSave(): void {
-    if (this._isSaving()) return;
-    const draft: IFurnitureBlueprint = this._draft();
-    if (draft.parts.length === 0) {
-      this._saveMessage.set('Add at least one part before saving.');
-      return;
-    }
-    const blueprint: IFurnitureBlueprint = {
-      ...draft,
-      id: this._blueprintService.generateId(),
-      name: this._blueprintName().trim() || 'Untitled Piece',
-      category: this._blueprintCategory(),
-      isPreset: false,
-      thumbnailDataUrl: this._captureThumbnail(),
-    };
-    this._isSaving.set(true);
-    this._saveMessage.set('Saving…');
-    this._blueprintService.save(blueprint).subscribe({
-      next: (saved: IFurnitureBlueprint): void => {
-        this._draft.set(saved);
-        this._isSaving.set(false);
-        this._saveMessage.set(`“${saved.name}” saved to catalog.`);
-      },
-      error: (): void => {
-        this._isSaving.set(false);
-        this._saveMessage.set('Save failed. Is the API server running?');
-      },
-    });
+    this._workbench.setThumbnail(this._captureThumbnail());
+    this._workbench.save().subscribe();
   }
 
   public formatNumber(value: number): string {
     return Number.isFinite(value) ? value.toFixed(2) : '0.00';
-  }
-
-  private _applyBlueprint(blueprint: IFurnitureBlueprint, name: string): void {
-    this._draft.set(blueprint);
-    this._blueprintName.set(name);
-    this._blueprintCategory.set(blueprint.category);
-    this._selectedPartId.set(blueprint.parts.length > 0 ? blueprint.parts[0].id : null);
-  }
-
-  private _mutateDraft(mutator: (blueprint: IFurnitureBlueprint) => IFurnitureBlueprint): void {
-    this._draft.update(mutator);
-    this._saveMessage.set('Unsaved changes');
-  }
-
-  private _updateSelectedPart(mutator: (part: IFurniturePart) => IFurniturePart): void {
-    const id: string | null = this._selectedPartId();
-    if (!id) return;
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
-      ...blueprint,
-      parts: blueprint.parts.map((part: IFurniturePart) => (part.id === id ? mutator(part) : part)),
-    }));
-  }
-
-  private _updateMaterial(key: string, mutator: (slot: IMaterialSlot) => IMaterialSlot): void {
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => {
-      const slot: IMaterialSlot | undefined = blueprint.materials[key];
-      if (!slot) return blueprint;
-      return { ...blueprint, materials: { ...blueprint.materials, [key]: mutator(slot) } };
-    });
   }
 
   private _valueFromEvent(event: Event): string {
@@ -382,10 +206,6 @@ export class CraftRoomComponent implements OnDestroy {
   private _numberFromEvent(event: Event): number {
     const target: HTMLInputElement = event.target as HTMLInputElement;
     return target.valueAsNumber;
-  }
-
-  private _toTitleCase(value: string): string {
-    return value.charAt(0).toUpperCase() + value.slice(1);
   }
 
   private _initializeStage(): void {
@@ -468,22 +288,17 @@ export class CraftRoomComponent implements OnDestroy {
     if (!this._scene) return;
     if (this._blueprintGroup) {
       this._stageGroup.remove(this._blueprintGroup);
-      disposeObject3D(this._blueprintGroup);
+      disposeFurnitureGroup(this._blueprintGroup);
       this._blueprintGroup = undefined;
     }
     this._partMeshes.clear();
     this._disposeSelectionOutline();
 
-    const blueprint: IFurnitureBlueprint = this._draft();
+    const blueprint: IFurnitureBlueprint = this._workbench.draft();
     if (blueprint.parts.length === 0) return;
 
-    const group: THREE.Group = buildFurnitureGroupFromBlueprint(blueprint.parts, blueprint.materials);
+    const group: THREE.Group = buildFurnitureMesh(blueprint.parts, blueprint.materials, { ground: false });
     group.updateMatrixWorld(true);
-    const bounds: THREE.Box3 = new THREE.Box3().setFromObject(group);
-    if (!bounds.isEmpty()) {
-      group.position.x = -(bounds.min.x + bounds.max.x) / 2;
-      group.position.z = -(bounds.min.z + bounds.max.z) / 2;
-    }
     group.traverse((object: THREE.Object3D): void => {
       const mesh: THREE.Mesh = object as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -497,7 +312,7 @@ export class CraftRoomComponent implements OnDestroy {
 
   private _updateSelectionOutline(): void {
     this._disposeSelectionOutline();
-    const id: string | null = this._selectedPartId();
+    const id: string | null = this._workbench.selectedPartId();
     if (!id) return;
     const mesh: THREE.Mesh | undefined = this._partMeshes.get(id);
     if (!mesh || !this._scene) return;
@@ -533,17 +348,27 @@ export class CraftRoomComponent implements OnDestroy {
     for (const intersection of intersections) {
       const partId: string | undefined = intersection.object.userData['partId'] as string | undefined;
       if (partId) {
-        this._selectedPartId.set(partId);
+        this._workbench.selectPart(partId);
         return;
       }
     }
-    this._selectedPartId.set(null);
+    this._workbench.clearPartSelection();
   }
 
   private _captureThumbnail(): string | undefined {
     if (!this._renderer || !this._scene || !this._camera) return undefined;
     this._renderer.render(this._scene, this._camera);
-    return this._renderer.domElement.toDataURL('image/png');
+    const source: HTMLCanvasElement = this._renderer.domElement;
+    const thumbnail: HTMLCanvasElement = document.createElement('canvas');
+    thumbnail.width = 256;
+    thumbnail.height = 256;
+    const context: CanvasRenderingContext2D | null = thumbnail.getContext('2d');
+    if (!context) return undefined;
+    const side: number = Math.min(source.width, source.height);
+    const sx: number = (source.width - side) / 2;
+    const sy: number = (source.height - side) / 2;
+    context.drawImage(source, sx, sy, side, side, 0, 0, 256, 256);
+    return thumbnail.toDataURL('image/jpeg', 0.82);
   }
 
   private _startRenderLoop(): void {
@@ -585,7 +410,7 @@ export class CraftRoomComponent implements OnDestroy {
       this._renderer = undefined;
     }
     this._disposeSelectionOutline();
-    if (this._blueprintGroup) disposeObject3D(this._blueprintGroup);
+    if (this._blueprintGroup) disposeFurnitureGroup(this._blueprintGroup);
     this._partMeshes.clear();
     if (this._scene) {
       this._scene.traverse((object: THREE.Object3D): void => {

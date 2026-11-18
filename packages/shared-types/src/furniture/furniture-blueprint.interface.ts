@@ -5,6 +5,7 @@ export type TFurnitureCategory = 'tables' | 'seating' | 'beds' | 'storage' | 'de
 
 export interface IFurnitureBlueprint {
   id: string;
+  userId: string | null;
   name: string;
   category: TFurnitureCategory;
   isPreset: boolean;

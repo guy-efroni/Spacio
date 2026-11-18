@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { FurnitureBlueprintsModule } from './furniture-blueprints/furniture-blueprints.module';
 
 @Module({
@@ -21,6 +22,7 @@ import { FurnitureBlueprintsModule } from './furniture-blueprints/furniture-blue
         synchronize: config.get<string>('DB_SYNCHRONIZE', 'true') !== 'false',
       }),
     }),
+    AuthModule,
     FurnitureBlueprintsModule,
   ],
   controllers: [AppController],

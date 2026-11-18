@@ -44,9 +44,6 @@ export class MaterialSlotDto {
   @IsString() color: string;
   @IsEnum(['matte', 'satin', 'gloss', 'metallic'] as const)
   finish: TMaterialFinish;
-  @IsOptional() @IsString() key?: string;
-  @IsOptional() @IsNumber() roughness?: number;
-  @IsOptional() @IsNumber() metalness?: number;
 }
 
 export class BlueprintDefinitionDto {
@@ -73,6 +70,7 @@ export function toBlueprintDefinition(
 ): IFurnitureBlueprint {
   return {
     id: '',
+    userId: null,
     name: dto.name,
     category: dto.category,
     isPreset: false,

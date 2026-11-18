@@ -1,5 +1,5 @@
 import { WallOpeningType } from '../enums/wall-opening-type.enum';
-import { IMaterialSlot } from '../furniture/material-slot.interface';
+import { IWallMaterialSlot } from '../furniture/wall-material-slot.interface';
 
 export interface IWallOpening {
   id: string;
@@ -9,6 +9,6 @@ export interface IWallOpening {
   width: number;
   height: number;
   elevation: number;
-  materials: Record<string, IMaterialSlot>;
+  materials: Record<string, IWallMaterialSlot>;
   styleOptions: Record<string, string>;
 }
