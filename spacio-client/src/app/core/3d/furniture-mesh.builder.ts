@@ -217,13 +217,16 @@ function createTubeGeometry(part: IFurniturePart, width: number, height: number,
         mapRange(point.z, minPoint.z, maxPoint.z, -depth / 2 + tubeRadius, depth / 2 - tubeRadius)
       )
   );
-  const curve: THREE.CatmullRomCurve3 = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
+  const isClosed: boolean =
+    points.length > 3 && points[0].distanceTo(points[points.length - 1]) < MIN_GEOMETRY_SIZE;
+  const curvePoints: THREE.Vector3[] = isClosed ? points.slice(0, -1) : points;
+  const curve: THREE.CatmullRomCurve3 = new THREE.CatmullRomCurve3(curvePoints, isClosed, 'catmullrom', 0.5);
   const geometry: THREE.TubeGeometry = new THREE.TubeGeometry(
     curve,
     TUBE_SEGMENTS,
     tubeRadius,
     TUBE_RADIAL_SEGMENTS,
-    false
+    isClosed
   );
   geometry.computeBoundingBox();
   const bounds: THREE.Box3 | null = geometry.boundingBox;

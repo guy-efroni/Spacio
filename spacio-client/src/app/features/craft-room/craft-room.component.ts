@@ -93,6 +93,7 @@ export class CraftRoomComponent implements OnDestroy {
 
   private readonly _shapeStudioOpen: WritableSignal<boolean> = signal<boolean>(false);
   public readonly shapeStudioOpen: Signal<boolean> = this._shapeStudioOpen.asReadonly();
+  public readonly hasSelectedPart: Signal<boolean> = computed<boolean>((): boolean => this._workbench.selectedPart() !== null);
   public readonly canOpenShapeStudio: Signal<boolean> = computed<boolean>((): boolean => {
     const shape: TPartShape | undefined = this._workbench.selectedPart()?.shape;
     return shape !== undefined && SHAPE_STUDIO_SHAPES.includes(shape);
@@ -203,7 +204,8 @@ export class CraftRoomComponent implements OnDestroy {
   }
 
   public onOpenShapeStudio(): void {
-    if (this.canOpenShapeStudio()) this._shapeStudioOpen.set(true);
+    if (!this._workbench.convertSelectedPartToEditableShape()) return;
+    this._shapeStudioOpen.set(true);
   }
 
   public onCloseShapeStudio(): void {

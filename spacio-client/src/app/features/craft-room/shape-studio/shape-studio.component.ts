@@ -22,6 +22,7 @@ const COORD_MIN: number = -0.5;
 const COORD_MAX: number = 0.5;
 const RADIUS_MIN: number = 0;
 const TUBE_Z_STEP: number = 0.2;
+const CLOSED_PATH_EPSILON: number = 1e-6;
 
 interface IGridLine {
   x1: number;
@@ -113,9 +114,16 @@ export class ShapeStudioComponent {
       const points: IFurniturePoint3D[] = this.points3D.map((item: IFurniturePoint3D): IFurniturePoint3D => ({ ...item }));
       const last: IFurniturePoint3D | undefined = points[points.length - 1];
       const z: number = last ? this._clamp(last.z === 0 ? TUBE_Z_STEP : 0, COORD_MIN, COORD_MAX) : 0;
-      points.push({ x: point.x, y: point.y, z });
+      const fresh: IFurniturePoint3D = { x: point.x, y: point.y, z };
+      if (this._isClosedPath(points)) {
+        const closing: IFurniturePoint3D = points[points.length - 1];
+        points.splice(points.length - 1, 1);
+        points.push(fresh, { ...closing });
+      } else {
+        points.push(fresh);
+      }
       this.pathPoints3DChange.emit(points);
-      this.selectedPointIndex = points.length - 1;
+      this.selectedPointIndex = points.length - (this._isClosedPath(points) ? 2 : 1);
       return;
     }
 
@@ -142,9 +150,7 @@ export class ShapeStudioComponent {
 
     if (this.isTubePath) {
       const points: IFurniturePoint3D[] = this.points3D.map((item: IFurniturePoint3D): IFurniturePoint3D => ({ ...item }));
-      const current: IFurniturePoint3D | undefined = points[index];
-      if (!current) return;
-      points[index] = { ...current, x: point.x, y: point.y };
+      if (!this._updateTubePoint(points, index, point.x, point.y)) return;
       this.pathPoints3DChange.emit(points);
       return;
     }
@@ -174,9 +180,16 @@ export class ShapeStudioComponent {
   public removeSelectedPoint(): void {
     if (!this.canRemovePoint) return;
     if (this.isTubePath) {
-      const points: IFurniturePoint3D[] = this.points3D
-        .map((item: IFurniturePoint3D): IFurniturePoint3D => ({ ...item }))
-        .filter((_item: IFurniturePoint3D, index: number): boolean => index !== this.selectedPointIndex);
+      const source: IFurniturePoint3D[] = this.points3D.map((item: IFurniturePoint3D): IFurniturePoint3D => ({ ...item }));
+      const closed: boolean = this._isClosedPath(source);
+      const lastIndex: number = source.length - 1;
+      let points: IFurniturePoint3D[] = source.filter(
+        (_item: IFurniturePoint3D, index: number): boolean => index !== this.selectedPointIndex
+      );
+      if (closed && (this.selectedPointIndex === 0 || this.selectedPointIndex === lastIndex)) {
+        const inner: IFurniturePoint3D[] = source.slice(1, -1);
+        points = inner.length > 0 ? [...inner, { ...inner[0] }] : inner;
+      }
       this.pathPoints3DChange.emit(points);
     } else {
       const points: IFurniturePoint2D[] = this.points2D
@@ -199,7 +212,14 @@ export class ShapeStudioComponent {
     const points: IFurniturePoint3D[] = this.points3D.map((item: IFurniturePoint3D): IFurniturePoint3D => ({ ...item }));
     const point: IFurniturePoint3D | undefined = points[index];
     if (!point) return;
-    points[index] = { ...point, [axis]: this._clamp(value, COORD_MIN, COORD_MAX) };
+    const coordinate: number = this._clamp(value, COORD_MIN, COORD_MAX);
+    const updated: IFurniturePoint3D = { ...point, [axis]: coordinate };
+    if (this._isClosedPath(points) && (index === 0 || index === points.length - 1)) {
+      const otherIndex: number = index === 0 ? points.length - 1 : 0;
+      const other: IFurniturePoint3D | undefined = points[otherIndex];
+      if (other) points[otherIndex] = { ...other, [axis]: coordinate };
+    }
+    points[index] = updated;
     this.pathPoints3DChange.emit(points);
   }
 
@@ -226,6 +246,30 @@ export class ShapeStudioComponent {
       lines.push({ x1: 0, y1: coordinate, x2: PAD_SIZE, y2: coordinate });
     }
     return lines;
+  }
+
+  private _isClosedPath(points: readonly IFurniturePoint3D[]): boolean {
+    if (points.length < 4) return false;
+    const first: IFurniturePoint3D = points[0];
+    const last: IFurniturePoint3D = points[points.length - 1];
+    return (
+      Math.abs(first.x - last.x) < CLOSED_PATH_EPSILON &&
+      Math.abs(first.y - last.y) < CLOSED_PATH_EPSILON &&
+      Math.abs(first.z - last.z) < CLOSED_PATH_EPSILON
+    );
+  }
+
+  private _updateTubePoint(points: IFurniturePoint3D[], index: number, x: number, y: number): boolean {
+    const current: IFurniturePoint3D | undefined = points[index];
+    if (!current) return false;
+    const closed: boolean = this._isClosedPath(points);
+    points[index] = { ...current, x, y };
+    if (closed && (index === 0 || index === points.length - 1)) {
+      const otherIndex: number = index === 0 ? points.length - 1 : 0;
+      const other: IFurniturePoint3D | undefined = points[otherIndex];
+      if (other) points[otherIndex] = { ...other, x, y };
+    }
+    return true;
   }
 
   private _pointFromEvent(event: PointerEvent): IFurniturePoint2D {

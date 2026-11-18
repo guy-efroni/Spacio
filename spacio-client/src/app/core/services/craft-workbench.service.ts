@@ -24,6 +24,7 @@ import {
   createFurnitureMaterialSlot,
   createFurniturePart,
 } from '@spacio/shared-types';
+import { convertPartToEditableShape } from '../../shared/utils/shape-converter.util';
 import { FurnitureCatalogService } from './furniture-catalog.service';
 
 export interface ICraftMaterialEntry {
@@ -303,6 +304,13 @@ export class CraftWorkbenchService {
 
   public updatePartMaterialSlot(materialSlot: string): void {
     this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, materialSlot }));
+  }
+
+  public convertSelectedPartToEditableShape(): boolean {
+    const part: IFurniturePart | null = this.selectedPart();
+    if (!part) return false;
+    this._updateSelectedPart((current: IFurniturePart): IFurniturePart => convertPartToEditableShape(current));
+    return true;
   }
 
   public updatePartBevelRadius(value: number): void {

@@ -88,8 +88,8 @@
           </label>
           <div class="craft-field__badge">Shape: {{ part.shape }}</div>
 
-          @if (canOpenShapeStudio()) {
-            <button type="button" class="craft-panel__action" (click)="onOpenShapeStudio()">Open Shape Studio</button>
+          @if (hasSelectedPart()) {
+            <button type="button" class="craft-panel__action" (click)="onOpenShapeStudio()">Edit Shape in Studio</button>
           }
 
           @if (showBevelRadius()) {
