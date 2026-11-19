@@ -1,43 +1,65 @@
-import { IEulerRotation } from '../geometry/euler-rotation.interface';
-import { IVector3D } from '../geometry/vector3d.interface';
+import { IEulerRotation } from "../geometry/euler-rotation.interface";
+import { IVector3D } from "../geometry/vector3d.interface";
 
 export type TPartShape =
-  | 'box'
-  | 'rounded-box'
-  | 'cylinder'
-  | 'sphere'
-  | 'capsule'
-  | 'cone'
-  | 'torus'
-  | 'extrude-2d'
-  | 'lathe-360'
-  | 'tube-path';
+  | "box"
+  | "cylinder"
+  | "capsule"
+  | "cone"
+  | "torus"
+  | "extrude-2d"
+  | "lathe-360";
 
-export interface IFurniturePoint2D {
+export type TSculptMode = "extrude" | "lathe";
+
+export type TSculptPointKind = "sharp" | "smooth";
+
+export type TSculptPresetId =
+  "rectangle" | "l-shape" | "arch" | "kidney" | "pill" | "turned-leg";
+
+export interface ISculptPoint {
   x: number;
   y: number;
-  smooth?: boolean;
+  kind: TSculptPointKind;
 }
 
-export interface IFurniturePoint3D {
-  x: number;
-  y: number;
-  z: number;
+export interface IFurniturePartSculpt {
+  mode: TSculptMode;
+  points: ISculptPoint[];
+  closed: boolean;
 }
 
-export interface IFurniturePartShapeParameters {
-  bevelRadius?: number;
-  points2D?: IFurniturePoint2D[];
-  pathPoints3D?: IFurniturePoint3D[];
-  tubeRadius?: number;
+export type TMaterialPreset =
+  | "oak"
+  | "walnut"
+  | "boucle"
+  | "leather"
+  | "brushed-brass"
+  | "matte-metal"
+  | "travertine"
+  | "glass";
+
+export interface IFurniturePartDimensions {
+  width: number;
+  height: number;
+  depth: number;
 }
 
-export interface IFurniturePart extends IFurniturePartShapeParameters {
+export interface IFurniturePart {
   id: string;
   name: string;
   shape: TPartShape;
-  dimensions: { width: number; height: number; depth: number };
+  dimensions: IFurniturePartDimensions;
   position: IVector3D;
   rotation: IEulerRotation;
-  materialSlot: string;
+  bevel: number;
+  taper: number;
+  materialPreset: TMaterialPreset;
+  color: string;
+  sculpt?: IFurniturePartSculpt;
+}
+
+export interface IFurniturePartMaterialOverride {
+  color?: string;
+  materialPreset?: TMaterialPreset;
 }

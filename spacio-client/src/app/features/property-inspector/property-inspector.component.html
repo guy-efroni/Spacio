@@ -12,42 +12,97 @@
           <p class="inspector-panel__subtitle">#{{ wallIdSuffix() }}</p>
         </div>
       </div>
-      <button type="button" class="inspector-panel__close" (click)="onDeselect()" title="Deselect" aria-label="Deselect">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+      <button
+        type="button"
+        class="inspector-panel__close"
+        (click)="onDeselect()"
+        title="Deselect"
+        aria-label="Deselect"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
       </button>
     </header>
     <div class="inspector-panel__content">
       <div class="inspector-panel__section">
         <div class="inspector-panel__readout">
           <span class="inspector-panel__readout-label">Length</span>
-          <span class="inspector-panel__readout-value">{{ wallLength() | number:'1.0-2' }} m</span>
+          <span class="inspector-panel__readout-value">{{ wallLength() | number: '1.0-2' }} m</span>
         </div>
       </div>
       <div class="inspector-panel__section">
         <label class="inspector-panel__control-label" for="height">Height</label>
         <div class="inspector-panel__control-row">
-          <input type="number" id="height" class="inspector-panel__input" [value]="formatNum(height())" (change)="onHeightChange($any($event.target).valueAsNumber)" [min]="minHeight" [max]="maxHeight" [step]="heightStep" />
+          <input
+            type="number"
+            id="height"
+            class="inspector-panel__input"
+            [value]="formatNum(height())"
+            (change)="onHeightChange($any($event.target).valueAsNumber)"
+            [min]="minHeight"
+            [max]="maxHeight"
+            [step]="heightStep"
+          />
           <span class="inspector-panel__unit">m</span>
         </div>
-        <input type="range" class="inspector-panel__slider" [value]="height()" (input)="onHeightChange($any($event.target).valueAsNumber)" [min]="minHeight" [max]="maxHeight" [step]="heightStep" />
+        <input
+          type="range"
+          class="inspector-panel__slider"
+          [value]="height()"
+          (input)="onHeightChange($any($event.target).valueAsNumber)"
+          [min]="minHeight"
+          [max]="maxHeight"
+          [step]="heightStep"
+        />
       </div>
       <div class="inspector-panel__section">
         <label class="inspector-panel__control-label" for="thickness">Thickness</label>
         <div class="inspector-panel__control-row">
-          <input type="number" id="thickness" class="inspector-panel__input" [value]="formatNum(thickness())" (change)="onThicknessChange($any($event.target).valueAsNumber)" [min]="minThickness" [max]="maxThickness" [step]="thicknessStep" />
+          <input
+            type="number"
+            id="thickness"
+            class="inspector-panel__input"
+            [value]="formatNum(thickness())"
+            (change)="onThicknessChange($any($event.target).valueAsNumber)"
+            [min]="minThickness"
+            [max]="maxThickness"
+            [step]="thicknessStep"
+          />
           <span class="inspector-panel__unit">m</span>
         </div>
-        <input type="range" class="inspector-panel__slider" [value]="thickness()" (input)="onThicknessChange($any($event.target).valueAsNumber)" [min]="minThickness" [max]="maxThickness" [step]="thicknessStep" />
+        <input
+          type="range"
+          class="inspector-panel__slider"
+          [value]="thickness()"
+          (input)="onThicknessChange($any($event.target).valueAsNumber)"
+          [min]="minThickness"
+          [max]="maxThickness"
+          [step]="thicknessStep"
+        />
       </div>
       <div class="inspector-panel__section inspector-panel__section--color">
         <label class="inspector-panel__control-label">Color</label>
         <div class="inspector-panel__color-picker-row">
-          <input type="color" class="inspector-panel__color-input" [value]="color()" (input)="onColorChange($any($event.target).value)" />
+          <input
+            type="color"
+            class="inspector-panel__color-input"
+            [value]="color()"
+            (input)="onColorChange($any($event.target).value)"
+          />
           <span class="inspector-panel__color-swatch" [style.background-color]="color()"></span>
         </div>
         <div class="inspector-panel__presets" role="group" aria-label="Color presets">
           @for (preset of colorPresets; track preset.value) {
-            <button type="button" class="inspector-panel__preset" [class.inspector-panel__preset--active]="color() === preset.value" [style.background-color]="preset.value" (click)="onColorChange(preset.value)" [title]="preset.name" [attr.aria-label]="preset.name"></button>
+            <button
+              type="button"
+              class="inspector-panel__preset"
+              [class.inspector-panel__preset--active]="color() === preset.value"
+              [style.background-color]="preset.value"
+              (click)="onColorChange(preset.value)"
+              [title]="preset.name"
+              [attr.aria-label]="preset.name"
+            ></button>
           }
         </div>
       </div>
@@ -57,8 +112,12 @@
         <div class="inspector-panel__section-header">
           <label class="inspector-panel__control-label">Openings</label>
           <div class="inspector-panel__opening-actions">
-            <button type="button" class="inspector-panel__mini-button" (click)="onAddDoor()">+ Door</button>
-            <button type="button" class="inspector-panel__mini-button" (click)="onAddWindow()">+ Window</button>
+            <button type="button" class="inspector-panel__mini-button" (click)="onAddDoor()">
+              + Door
+            </button>
+            <button type="button" class="inspector-panel__mini-button" (click)="onAddWindow()">
+              + Window
+            </button>
           </div>
         </div>
         @if (wallOpenings().length === 0) {
@@ -68,20 +127,69 @@
             @for (opening of wallOpenings(); track opening.id) {
               <div class="inspector-panel__opening-card">
                 <div class="inspector-panel__opening-header">
-                  <span class="inspector-panel__opening-type">{{ opening.type === wallOpeningType.Door ? 'Door' : 'Window' }}</span>
-                  <button type="button" class="inspector-panel__icon-button" (click)="onRemoveOpening(opening.id)" title="Remove opening">×</button>
+                  <span class="inspector-panel__opening-type">{{
+                    opening.type === wallOpeningType.Door ? 'Door' : 'Window'
+                  }}</span>
+                  <button
+                    type="button"
+                    class="inspector-panel__icon-button"
+                    (click)="onRemoveOpening(opening.id)"
+                    title="Remove opening"
+                  >
+                    ×
+                  </button>
                 </div>
-                <label class="inspector-panel__field"><span class="inspector-panel__field-label">Position (m)</span>
-                  <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.positionAlongWall)" [min]="openingMinPosition(opening)" [max]="openingMaxPosition(opening)" [step]="openingPositionStep" (change)="onOpeningPositionChange(opening.id, $any($event.target).valueAsNumber)" />
+                <label class="inspector-panel__field"
+                  ><span class="inspector-panel__field-label">Position (m)</span>
+                  <input
+                    type="number"
+                    class="inspector-panel__input inspector-panel__input--compact"
+                    [value]="formatOpeningValue(opening.positionAlongWall)"
+                    [min]="openingMinPosition(opening)"
+                    [max]="openingMaxPosition(opening)"
+                    [step]="openingPositionStep"
+                    (change)="
+                      onOpeningPositionChange(opening.id, $any($event.target).valueAsNumber)
+                    "
+                  />
                 </label>
-                <label class="inspector-panel__field"><span class="inspector-panel__field-label">Width (m)</span>
-                  <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.width)" [min]="minOpeningWidth" [max]="openingMaxWidth(opening)" [step]="openingWidthStep" (change)="onOpeningWidthChange(opening.id, $any($event.target).valueAsNumber)" />
+                <label class="inspector-panel__field"
+                  ><span class="inspector-panel__field-label">Width (m)</span>
+                  <input
+                    type="number"
+                    class="inspector-panel__input inspector-panel__input--compact"
+                    [value]="formatOpeningValue(opening.width)"
+                    [min]="minOpeningWidth"
+                    [max]="openingMaxWidth(opening)"
+                    [step]="openingWidthStep"
+                    (change)="onOpeningWidthChange(opening.id, $any($event.target).valueAsNumber)"
+                  />
                 </label>
-                <label class="inspector-panel__field"><span class="inspector-panel__field-label">Height (m)</span>
-                  <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.height)" [min]="minOpeningHeight" [max]="openingMaxHeight(opening)" [step]="openingHeightStep" (change)="onOpeningHeightChange(opening.id, $any($event.target).valueAsNumber)" />
+                <label class="inspector-panel__field"
+                  ><span class="inspector-panel__field-label">Height (m)</span>
+                  <input
+                    type="number"
+                    class="inspector-panel__input inspector-panel__input--compact"
+                    [value]="formatOpeningValue(opening.height)"
+                    [min]="minOpeningHeight"
+                    [max]="openingMaxHeight(opening)"
+                    [step]="openingHeightStep"
+                    (change)="onOpeningHeightChange(opening.id, $any($event.target).valueAsNumber)"
+                  />
                 </label>
-                <label class="inspector-panel__field"><span class="inspector-panel__field-label">Elevation (m)</span>
-                  <input type="number" class="inspector-panel__input inspector-panel__input--compact" [value]="formatOpeningValue(opening.elevation)" [min]="minOpeningElevation" [max]="openingMaxElevation(opening)" [step]="openingElevationStep" (change)="onOpeningElevationChange(opening.id, $any($event.target).valueAsNumber)" />
+                <label class="inspector-panel__field"
+                  ><span class="inspector-panel__field-label">Elevation (m)</span>
+                  <input
+                    type="number"
+                    class="inspector-panel__input inspector-panel__input--compact"
+                    [value]="formatOpeningValue(opening.elevation)"
+                    [min]="minOpeningElevation"
+                    [max]="openingMaxElevation(opening)"
+                    [step]="openingElevationStep"
+                    (change)="
+                      onOpeningElevationChange(opening.id, $any($event.target).valueAsNumber)
+                    "
+                  />
                 </label>
 
                 <div class="inspector-panel__subsection">
@@ -89,7 +197,13 @@
                   @for (style of openingStyleEntries(opening); track style.key) {
                     <label class="inspector-panel__field">
                       <span class="inspector-panel__field-label">{{ style.key }}</span>
-                      <select class="inspector-panel__select" [value]="style.value" (change)="onOpeningStyleChange(opening.id, style.key, $any($event.target).value)">
+                      <select
+                        class="inspector-panel__select"
+                        [value]="style.value"
+                        (change)="
+                          onOpeningStyleChange(opening.id, style.key, $any($event.target).value)
+                        "
+                      >
                         @for (opt of styleOptionsFor(style.key, opening.type); track opt) {
                           <option [value]="opt">{{ opt }}</option>
                         }
@@ -103,8 +217,28 @@
                   @for (mat of openingMaterials(opening); track mat.key) {
                     <div class="inspector-panel__material-row">
                       <span class="inspector-panel__material-label">{{ mat.slot.label }}</span>
-                      <input type="color" class="inspector-panel__color-input inspector-panel__color-input--sm" [value]="mat.slot.color" (input)="onOpeningMaterialColorChange(opening.id, mat.key, $any($event.target).value)" />
-                      <select class="inspector-panel__select inspector-panel__select--sm" (change)="onOpeningMaterialFinishChange(opening.id, mat.key, $any($event.target).value)">
+                      <input
+                        type="color"
+                        class="inspector-panel__color-input inspector-panel__color-input--sm"
+                        [value]="mat.slot.color"
+                        (input)="
+                          onOpeningMaterialColorChange(
+                            opening.id,
+                            mat.key,
+                            $any($event.target).value
+                          )
+                        "
+                      />
+                      <select
+                        class="inspector-panel__select inspector-panel__select--sm"
+                        (change)="
+                          onOpeningMaterialFinishChange(
+                            opening.id,
+                            mat.key,
+                            $any($event.target).value
+                          )
+                        "
+                      >
                         <option value="">Finish</option>
                         @for (preset of finishPresets; track preset.name) {
                           <option [value]="preset.name">{{ preset.name }}</option>
@@ -121,7 +255,13 @@
 
       <div class="inspector-panel__divider"></div>
       <div class="inspector-panel__actions">
-        <button type="button" class="inspector-panel__button inspector-panel__button--danger" (click)="onDeleteWall()">Delete Wall</button>
+        <button
+          type="button"
+          class="inspector-panel__button inspector-panel__button--danger"
+          (click)="onDeleteWall()"
+        >
+          Delete Wall
+        </button>
       </div>
     </div>
   </aside>
@@ -130,60 +270,130 @@
     <header class="inspector-panel__header">
       <div class="inspector-panel__title-group">
         <span class="inspector-panel__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 18V9m16 9V9M2 9h20M4 14h16M6 18v2m12-2v2" /></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 18V9m16 9V9M2 9h20M4 14h16M6 18v2m12-2v2" />
+          </svg>
         </span>
         <div class="inspector-panel__title-text">
           <h2 class="inspector-panel__title">{{ item.blueprintName }}</h2>
           <p class="inspector-panel__subtitle">#{{ furnitureIdSuffix() }}</p>
         </div>
       </div>
-      <button type="button" class="inspector-panel__close" (click)="onDeselect()" title="Deselect" aria-label="Deselect">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+      <button
+        type="button"
+        class="inspector-panel__close"
+        (click)="onDeselect()"
+        title="Deselect"
+        aria-label="Deselect"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
       </button>
     </header>
-      <div class="inspector-panel__content">
-        <div class="inspector-panel__section">
-          <label class="inspector-panel__control-label">Transform</label>
-          <label class="inspector-panel__field"><span class="inspector-panel__field-label">Rotation Y (°)</span>
-            <input type="number" class="inspector-panel__input" [value]="furnitureRotationDegrees(item)" step="15" (change)="onFurnitureRotationChange($any($event.target).valueAsNumber)" />
+    <div class="inspector-panel__content">
+      <div class="inspector-panel__section">
+        <label class="inspector-panel__control-label">Transform</label>
+        <label class="inspector-panel__field"
+          ><span class="inspector-panel__field-label">Rotation Y (°)</span>
+          <input
+            type="number"
+            class="inspector-panel__input"
+            [value]="furnitureRotationDegrees(item)"
+            step="15"
+            (change)="onFurnitureRotationChange($any($event.target).valueAsNumber)"
+          />
+        </label>
+        <div class="inspector-panel__scale-grid">
+          <label class="inspector-panel__field"
+            ><span class="inspector-panel__field-label">Scale X</span>
+            <input
+              type="number"
+              class="inspector-panel__input"
+              [value]="formatNum(item.scale.x)"
+              [min]="minFurnitureScale"
+              [max]="maxFurnitureScale"
+              [step]="furnitureScaleStep"
+              (change)="onFurnitureScaleChange('x', $any($event.target).valueAsNumber)"
+            />
           </label>
-          <div class="inspector-panel__scale-grid">
-            <label class="inspector-panel__field"><span class="inspector-panel__field-label">Scale X</span>
-              <input type="number" class="inspector-panel__input" [value]="formatNum(item.scale.x)" [min]="minFurnitureScale" [max]="maxFurnitureScale" [step]="furnitureScaleStep" (change)="onFurnitureScaleChange('x', $any($event.target).valueAsNumber)" />
-            </label>
-            <label class="inspector-panel__field"><span class="inspector-panel__field-label">Scale Y</span>
-              <input type="number" class="inspector-panel__input" [value]="formatNum(item.scale.y)" [min]="minFurnitureScale" [max]="maxFurnitureScale" [step]="furnitureScaleStep" (change)="onFurnitureScaleChange('y', $any($event.target).valueAsNumber)" />
-            </label>
-            <label class="inspector-panel__field"><span class="inspector-panel__field-label">Scale Z</span>
-              <input type="number" class="inspector-panel__input" [value]="formatNum(item.scale.z)" [min]="minFurnitureScale" [max]="maxFurnitureScale" [step]="furnitureScaleStep" (change)="onFurnitureScaleChange('z', $any($event.target).valueAsNumber)" />
-            </label>
-          </div>
-          <label class="inspector-panel__field"><span class="inspector-panel__field-label">Uniform Scale</span>
-            <input type="number" class="inspector-panel__input" [value]="formatNum(uniformScale(item))" [min]="minFurnitureScale" [max]="maxFurnitureScale" [step]="furnitureScaleStep" (change)="onFurnitureUniformScaleChange($any($event.target).valueAsNumber)" />
+          <label class="inspector-panel__field"
+            ><span class="inspector-panel__field-label">Scale Y</span>
+            <input
+              type="number"
+              class="inspector-panel__input"
+              [value]="formatNum(item.scale.y)"
+              [min]="minFurnitureScale"
+              [max]="maxFurnitureScale"
+              [step]="furnitureScaleStep"
+              (change)="onFurnitureScaleChange('y', $any($event.target).valueAsNumber)"
+            />
+          </label>
+          <label class="inspector-panel__field"
+            ><span class="inspector-panel__field-label">Scale Z</span>
+            <input
+              type="number"
+              class="inspector-panel__input"
+              [value]="formatNum(item.scale.z)"
+              [min]="minFurnitureScale"
+              [max]="maxFurnitureScale"
+              [step]="furnitureScaleStep"
+              (change)="onFurnitureScaleChange('z', $any($event.target).valueAsNumber)"
+            />
           </label>
         </div>
-
-        <div class="inspector-panel__divider"></div>
-        <div class="inspector-panel__section">
-          <label class="inspector-panel__control-label">Material Slots</label>
-          @for (mat of furnitureMaterialEntries(item); track mat.key) {
-            <div class="inspector-panel__material-row">
-              <span class="inspector-panel__material-label">{{ mat.slot.label }}</span>
-              <input type="color" class="inspector-panel__color-input inspector-panel__color-input--sm" [value]="mat.slot.color" (input)="onFurnitureMaterialColorChange(mat.key, $any($event.target).value)" />
-              <select class="inspector-panel__select inspector-panel__select--sm" [value]="mat.slot.finish" (change)="onFurnitureMaterialFinishChange(mat.key, $any($event.target).value)">
-                @for (finish of finishOptions; track finish) {
-                  <option [value]="finish">{{ finish | titlecase }}</option>
-                }
-              </select>
-            </div>
-          }
-        </div>
-
-        <div class="inspector-panel__divider"></div>
-        <div class="inspector-panel__actions">
-          <button type="button" class="inspector-panel__button" (click)="onEditInCraftRoom()">Edit in Craft Room</button>
-          <button type="button" class="inspector-panel__button inspector-panel__button--danger" (click)="onDeleteFurniture()">Delete Furniture</button>
-        </div>
+        <label class="inspector-panel__field"
+          ><span class="inspector-panel__field-label">Uniform Scale</span>
+          <input
+            type="number"
+            class="inspector-panel__input"
+            [value]="formatNum(uniformScale(item))"
+            [min]="minFurnitureScale"
+            [max]="maxFurnitureScale"
+            [step]="furnitureScaleStep"
+            (change)="onFurnitureUniformScaleChange($any($event.target).valueAsNumber)"
+          />
+        </label>
       </div>
+
+      <div class="inspector-panel__divider"></div>
+      <div class="inspector-panel__section">
+        <label class="inspector-panel__control-label">Material Studio</label>
+        @for (mat of furnitureMaterialEntries(item); track mat.key) {
+          <div class="inspector-panel__material-row">
+            <span class="inspector-panel__material-label">{{ mat.label }}</span>
+            <input
+              type="color"
+              class="inspector-panel__color-input inspector-panel__color-input--sm"
+              [value]="mat.color"
+              (input)="onFurnitureMaterialColorChange(mat.key, $any($event.target).value)"
+            />
+            <select
+              class="inspector-panel__select inspector-panel__select--sm"
+              [value]="mat.materialPreset"
+              (change)="onFurnitureMaterialPresetChange(mat.key, $any($event.target).value)"
+            >
+              @for (preset of materialPresets; track preset.id) {
+                <option [value]="preset.id">{{ preset.label }}</option>
+              }
+            </select>
+          </div>
+        }
+      </div>
+
+      <div class="inspector-panel__divider"></div>
+      <div class="inspector-panel__actions">
+        <button type="button" class="inspector-panel__button" (click)="onEditInCraftRoom()">
+          Edit in Craft Room
+        </button>
+        <button
+          type="button"
+          class="inspector-panel__button inspector-panel__button--danger"
+          (click)="onDeleteFurniture()"
+        >
+          Delete Furniture
+        </button>
+      </div>
+    </div>
   </aside>
 }

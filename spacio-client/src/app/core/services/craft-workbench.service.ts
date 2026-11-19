@@ -1,119 +1,93 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, of, tap } from 'rxjs';
 import {
-  DEFAULT_BEVEL_RADIUS,
-  DEFAULT_EXTRUDE_POINTS,
-  DEFAULT_FURNITURE_MATERIAL_FINISH,
-  DEFAULT_FURNITURE_SLOT_COLOR,
-  DEFAULT_LATHE_POINTS,
-  DEFAULT_TUBE_PATH_POINTS,
-  DEFAULT_TUBE_RADIUS,
+  DEFAULT_MATERIAL_PRESET,
   FURNITURE_CATEGORY_OPTIONS,
   IFurnitureBlueprint,
   IFurniturePart,
-  IFurniturePartShapeParameters,
-  IFurniturePoint2D,
-  IFurniturePoint3D,
-  IMaterialSlot,
-  MATERIAL_FINISH_OPTIONS,
-  PART_SHAPE_OPTIONS,
-  TMaterialFinish,
+  IFurniturePartDimensions,
+  IFurniturePartSculpt,
+  IMaterialPresetDefinition,
+  ISculptPoint,
+  MATERIAL_PRESET_IDS,
+  MATERIAL_PRESET_OPTIONS,
+  SCULPT_MAX_POINTS,
+  TMaterialPreset,
   TFurnitureCategory,
   TPartShape,
+  TSculptMode,
+  TSculptPresetId,
+  clampBevel,
+  clampTaper,
   cloneFurniturePart,
-  createFurnitureMaterialSlot,
+  cloneFurniturePartSculpt,
   createFurniturePart,
+  createFurniturePartSculpt,
+  getMaterialPresetDefinition,
+  normalizeSculptPoints,
+  getMaterialPresetSwatch,
+  getSculptPreset,
+  isSculptShape,
+  sculptModeForPartShape,
 } from '@spacio/shared-types';
-import { convertPartToEditableShape } from '../../shared/utils/shape-converter.util';
 import { FurnitureCatalogService } from './furniture-catalog.service';
 
-export interface ICraftMaterialEntry {
-  key: string;
-  slot: IMaterialSlot;
+export interface ICraftShapeOption {
+  readonly shape: TPartShape;
+  readonly label: string;
+  readonly hint: string;
 }
 
-const BLANK_BLUEPRINT_OPTION_ID: string = 'blank';
-const DEFAULT_BLUEPRINT_NAME: string = 'Untitled Piece';
+const BLANK_BLUEPRINT_OPTION_ID = 'blank';
+const DEFAULT_BLUEPRINT_NAME = 'Untitled Piece';
 const DEFAULT_BLUEPRINT_CATEGORY: TFurnitureCategory = 'decor';
-const FALLBACK_MATERIAL_SLOT_KEY: string = 'material-1';
-const MATERIAL_SLOT_KEY_PREFIX: string = 'material-';
-const MATERIAL_SLOT_KEY_RANDOM_LENGTH: number = 4;
-const DEFAULT_MATERIAL_LABEL_PREFIX: string = 'Material ';
-const COPY_SUFFIX: string = ' Copy';
-const EDITED_SUFFIX: string = ' Edited';
-const UNSAVED_CHANGES_MESSAGE: string = 'Unsaved changes';
-const BLANK_STARTED_MESSAGE: string = 'Blank piece started.';
-const SAVING_MESSAGE: string = 'Saving…';
-const NO_PARTS_SAVE_MESSAGE: string = 'Add at least one part before saving.';
-const SAVE_FAILED_MESSAGE: string = 'Save failed. Please try again.';
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const COPY_SUFFIX = ' Copy';
+const EDITED_SUFFIX = ' Edited';
+const UNSAVED_CHANGES_MESSAGE = 'Unsaved changes';
+const BLANK_STARTED_MESSAGE = 'Blank canvas ready.';
+const SAVING_MESSAGE = 'Saving…';
+const NO_PARTS_SAVE_MESSAGE = 'Add at least one part before saving.';
+const SAVE_FAILED_MESSAGE = 'Save failed. Please try again.';
+const MESSAGE_ADDED_PREFIX = 'Added ';
+const MESSAGE_SAVED_PREFIX = '“';
+const MESSAGE_SAVED_SUFFIX = '” saved to catalog.';
+const MESSAGE_DUPLICATED = 'Duplicated part.';
+const MESSAGE_DUPLICATED_MIRROR = 'Duplicated with mirror.';
+const MESSAGE_DROPPED = 'Dropped to floor.';
+const MESSAGE_CENTERED = 'Centered on stage.';
+const MESSAGE_MIRRORED = 'Mirrored ';
+const MESSAGE_SCULPTED = '2D sculptor opened.';
+const MESSAGE_SCULPT_UPDATED = 'Outline updated.';
 
-const MESSAGE_BLUEPRINT_LOADED_PREFIX: string = 'Cloned “';
-const MESSAGE_BLUEPRINT_LOADED_SUFFIX: string = '”.';
-const MESSAGE_ADDED_PREFIX: string = 'Added ';
-const MESSAGE_SAVED_PREFIX: string = '“';
-const MESSAGE_SAVED_SUFFIX: string = '” saved to catalog.';
-const MESSAGE_DUPLICATED: string = 'Duplicated part.';
-const MESSAGE_DUPLICATED_MIRROR: string = 'Duplicated with mirror.';
+const SHAPE_OPTIONS: readonly ICraftShapeOption[] = [
+  { shape: 'box', label: 'Block', hint: 'Soft-edged volume' },
+  { shape: 'cylinder', label: 'Cylinder', hint: 'Tapered pedestal' },
+  { shape: 'capsule', label: 'Pill / Arch', hint: 'Plush rounded form' },
+  { shape: 'cone', label: 'Cone', hint: 'Shade or accent' },
+  { shape: 'torus', label: 'Ring', hint: 'Sculptural detail' },
+];
 
-const PART_SHAPE_BOX: TPartShape = 'box';
-const PART_SHAPE_ROUNDED_BOX: TPartShape = 'rounded-box';
-const PART_SHAPE_CYLINDER: TPartShape = 'cylinder';
-const PART_SHAPE_SPHERE: TPartShape = 'sphere';
-const PART_SHAPE_CAPSULE: TPartShape = 'capsule';
-const PART_SHAPE_CONE: TPartShape = 'cone';
-const PART_SHAPE_TORUS: TPartShape = 'torus';
-const PART_SHAPE_EXTRUDE: TPartShape = 'extrude-2d';
-const PART_SHAPE_LATHE: TPartShape = 'lathe-360';
-const PART_SHAPE_TUBE: TPartShape = 'tube-path';
-
-const AXIS_X: 'x' = 'x';
-const AXIS_Z: 'z' = 'z';
-
-const DEFAULT_PART_DIMENSIONS: Record<TPartShape, { width: number; height: number; depth: number }> = {
-  [PART_SHAPE_BOX]: { width: 0.4, height: 0.4, depth: 0.4 },
-  [PART_SHAPE_ROUNDED_BOX]: { width: 0.4, height: 0.4, depth: 0.4 },
-  [PART_SHAPE_CYLINDER]: { width: 0.2, height: 0.6, depth: 0.2 },
-  [PART_SHAPE_SPHERE]: { width: 0.4, height: 0.4, depth: 0.4 },
-  [PART_SHAPE_CAPSULE]: { width: 0.2, height: 0.6, depth: 0.2 },
-  [PART_SHAPE_CONE]: { width: 0.3, height: 0.6, depth: 0.3 },
-  [PART_SHAPE_TORUS]: { width: 0.5, height: 0.12, depth: 0.5 },
-  [PART_SHAPE_EXTRUDE]: { width: 0.6, height: 0.06, depth: 0.5 },
-  [PART_SHAPE_LATHE]: { width: 0.24, height: 0.6, depth: 0.24 },
-  [PART_SHAPE_TUBE]: { width: 0.6, height: 0.6, depth: 0.4 },
+const DEFAULT_PART_DIMENSIONS: Record<TPartShape, IFurniturePartDimensions> = {
+  box: { width: 0.5, height: 0.4, depth: 0.5 },
+  cylinder: { width: 0.22, height: 0.6, depth: 0.22 },
+  capsule: { width: 0.26, height: 0.6, depth: 0.26 },
+  cone: { width: 0.34, height: 0.6, depth: 0.34 },
+  torus: { width: 0.6, height: 0.14, depth: 0.6 },
+  'extrude-2d': { width: 0.5, height: 0.5, depth: 0.18 },
+  'lathe-360': { width: 0.28, height: 0.6, depth: 0.28 },
 };
 
-function createShapeParameters(shape: TPartShape): IFurniturePartShapeParameters {
-  if (shape === PART_SHAPE_ROUNDED_BOX || shape === PART_SHAPE_EXTRUDE) {
-    return {
-      bevelRadius: DEFAULT_BEVEL_RADIUS,
-      ...(shape === PART_SHAPE_EXTRUDE
-        ? { points2D: DEFAULT_EXTRUDE_POINTS.map((point: IFurniturePoint2D): IFurniturePoint2D => ({ ...point })) }
-        : {}),
-    };
-  }
-  if (shape === PART_SHAPE_LATHE) {
-    return {
-      points2D: DEFAULT_LATHE_POINTS.map((point: IFurniturePoint2D): IFurniturePoint2D => ({ ...point })),
-    };
-  }
-  if (shape === PART_SHAPE_TUBE) {
-    return {
-      pathPoints3D: DEFAULT_TUBE_PATH_POINTS.map((point: IFurniturePoint3D): IFurniturePoint3D => ({ ...point })),
-      tubeRadius: DEFAULT_TUBE_RADIUS,
-    };
-  }
-  return {};
-}
-const PART_GRID_COLUMNS: number = 3;
-const PART_GRID_STEP: number = 0.5;
-const PART_GRID_OFFSET: number = 0.5;
+const PART_GRID_COLUMNS = 3;
+const PART_GRID_STEP = 0.55;
+const PART_GRID_OFFSET = 0.55;
 
 function cloneDraft(blueprint: IFurnitureBlueprint): IFurnitureBlueprint {
   return {
     ...blueprint,
     parts: blueprint.parts.map((part: IFurniturePart): IFurniturePart => cloneFurniturePart(part)),
     materials: Object.fromEntries(
-      Object.entries(blueprint.materials).map(([key, slot]: [string, IMaterialSlot]): [string, IMaterialSlot] => [key, { ...slot }])
+      Object.entries(blueprint.materials).map(([key, slot]) => [key, { ...slot }]),
     ),
   };
 }
@@ -125,7 +99,8 @@ export class CraftWorkbenchService {
   private readonly _draft: WritableSignal<IFurnitureBlueprint>;
   private readonly _selectedPartId: WritableSignal<string | null> = signal<string | null>(null);
   private readonly _blueprintName: WritableSignal<string> = signal<string>(DEFAULT_BLUEPRINT_NAME);
-  private readonly _blueprintCategory: WritableSignal<TFurnitureCategory> = signal<TFurnitureCategory>(DEFAULT_BLUEPRINT_CATEGORY);
+  private readonly _blueprintCategory: WritableSignal<TFurnitureCategory> =
+    signal<TFurnitureCategory>(DEFAULT_BLUEPRINT_CATEGORY);
   private readonly _saveMessage: WritableSignal<string> = signal<string>('');
   private readonly _isSaving: WritableSignal<boolean> = signal<boolean>(false);
   private readonly _isExisting: WritableSignal<boolean> = signal<boolean>(false);
@@ -140,12 +115,12 @@ export class CraftWorkbenchService {
   public readonly isSaving: Signal<boolean>;
   public readonly mirrorX: Signal<boolean>;
   public readonly mirrorZ: Signal<boolean>;
-  public readonly partShapes: readonly TPartShape[] = PART_SHAPE_OPTIONS;
-  public readonly finishOptions: readonly TMaterialFinish[] = MATERIAL_FINISH_OPTIONS;
+
+  public readonly shapeOptions: readonly ICraftShapeOption[] = SHAPE_OPTIONS;
+  public readonly materialPresets: readonly IMaterialPresetDefinition[] = MATERIAL_PRESET_OPTIONS;
   public readonly categoryOptions: readonly TFurnitureCategory[] = FURNITURE_CATEGORY_OPTIONS;
 
   public readonly selectedPart: Signal<IFurniturePart | null>;
-  public readonly materialEntries: Signal<readonly ICraftMaterialEntry[]>;
 
   public constructor() {
     this._draft = signal<IFurnitureBlueprint>(this._catalog.createBlankDraft());
@@ -163,11 +138,6 @@ export class CraftWorkbenchService {
       if (!id) return null;
       return this._draft().parts.find((part: IFurniturePart): boolean => part.id === id) ?? null;
     });
-    this.materialEntries = computed<readonly ICraftMaterialEntry[]>((): readonly ICraftMaterialEntry[] =>
-      Object.entries(this._draft().materials).map(
-        ([key, slot]: [string, IMaterialSlot]): ICraftMaterialEntry => ({ key, slot })
-      )
-    );
   }
 
   public startBlank(): void {
@@ -178,7 +148,8 @@ export class CraftWorkbenchService {
   }
 
   public loadBlueprint(blueprint: IFurnitureBlueprint, message: string): void {
-    const isExisting: boolean = !blueprint.isPreset && this._catalog.getById(blueprint.id) !== undefined;
+    const isExisting: boolean =
+      !blueprint.isPreset && this._catalog.getById(blueprint.id) !== undefined;
     const source: IFurnitureBlueprint = isExisting
       ? cloneDraft(blueprint)
       : this._catalog.cloneAsDraft(blueprint);
@@ -197,22 +168,29 @@ export class CraftWorkbenchService {
     const source: IFurnitureBlueprint = this._catalog.cloneAsDraft(blueprint);
     this._isExisting.set(false);
     this._applyBlueprint(source, source.name);
-    this._saveMessage.set(`Cloned “${blueprint.name}”.`);
+    this._saveMessage.set(`Starting from “${blueprint.name}”.`);
   }
 
   public addPart(shape: TPartShape): void {
-    const dimensions: { width: number; height: number; depth: number } = DEFAULT_PART_DIMENSIONS[shape];
+    const dimensions: IFurniturePartDimensions = DEFAULT_PART_DIMENSIONS[shape];
     const index: number = this._draft().parts.length;
-    const materialSlot: string = Object.keys(this._draft().materials)[0] ?? FALLBACK_MATERIAL_SLOT_KEY;
+    const preset: TMaterialPreset = shape === 'capsule' ? 'boucle' : DEFAULT_MATERIAL_PRESET;
     const part: IFurniturePart = createFurniturePart(
       this._catalog.generateId(),
       `${this._toTitleCase(shape)} ${index + 1}`,
       shape,
       dimensions,
-      { x: (index % PART_GRID_COLUMNS) * PART_GRID_STEP - PART_GRID_OFFSET, y: dimensions.height / 2, z: 0 },
-      materialSlot,
-      { x: 0, y: 0, z: 0 },
-      createShapeParameters(shape)
+      {
+        x: (index % PART_GRID_COLUMNS) * PART_GRID_STEP - PART_GRID_OFFSET,
+        y: dimensions.height / 2,
+        z: Math.floor(index / PART_GRID_COLUMNS) * PART_GRID_STEP - PART_GRID_OFFSET,
+      },
+      preset,
+      getMaterialPresetSwatch(preset),
+      {
+        bevel: shape === 'box' ? 0.16 : shape === 'torus' ? 0 : 0.08,
+        taper: shape === 'cylinder' || shape === 'cone' ? 0.18 : 0,
+      },
     );
     this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
       ...blueprint,
@@ -248,22 +226,16 @@ export class CraftWorkbenchService {
 
   public deleteSelectedPart(): void {
     const id: string | null = this._selectedPartId();
-    if (!id) return;
-    this.removePart(id);
+    if (id) this.removePart(id);
   }
 
   public removePart(id: string): void {
-    const blueprint: IFurnitureBlueprint = this._draft();
-    if (!blueprint.parts.some((part: IFurniturePart): boolean => part.id === id)) return;
+    if (!this._draft().parts.some((part: IFurniturePart): boolean => part.id === id)) return;
     this._mutateDraft((current: IFurnitureBlueprint): IFurnitureBlueprint => ({
       ...current,
       parts: current.parts.filter((part: IFurniturePart): boolean => part.id !== id),
     }));
     if (this._selectedPartId() === id) this._selectedPartId.set(null);
-  }
-
-  public deletePart(id: string): void {
-    this.removePart(id);
   }
 
   public selectPart(id: string): void {
@@ -278,8 +250,8 @@ export class CraftWorkbenchService {
     this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, name }));
   }
 
-  public updatePartDimension(field: 'width' | 'height' | 'depth', value: number): void {
-    if (!Number.isFinite(value) || value <= 0) return;
+  public updatePartDimension(field: keyof IFurniturePartDimensions, value: number): void {
+    if (!Number.isFinite(value) || value < 0.01) return;
     this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
       ...part,
       dimensions: { ...part.dimensions, [field]: value },
@@ -302,45 +274,159 @@ export class CraftWorkbenchService {
     }));
   }
 
-  public updatePartMaterialSlot(materialSlot: string): void {
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, materialSlot }));
-  }
-
-  public convertSelectedPartToEditableShape(): boolean {
-    const part: IFurniturePart | null = this.selectedPart();
-    if (!part) return false;
-    this._updateSelectedPart((current: IFurniturePart): IFurniturePart => convertPartToEditableShape(current));
-    return true;
-  }
-
-  public updatePartBevelRadius(value: number): void {
-    if (!Number.isFinite(value) || value < 0) return;
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, bevelRadius: value }));
-  }
-
-  public updatePartPoints2D(points: readonly IFurniturePoint2D[]): void {
-    if (points.length < 3) return;
+  public updatePartBevel(value: number): void {
     this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
       ...part,
-      points2D: points.map((point: IFurniturePoint2D): IFurniturePoint2D => ({ ...point })),
+      bevel: clampBevel(value),
     }));
   }
 
-  public updatePartPathPoints3D(points: readonly IFurniturePoint3D[]): void {
-    if (points.length < 2) return;
+  public updatePartTaper(value: number): void {
     this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
       ...part,
-      pathPoints3D: points.map((point: IFurniturePoint3D): IFurniturePoint3D => ({ ...point })),
+      taper: clampTaper(value),
     }));
   }
 
-  public updatePartTubeRadius(value: number): void {
-    if (!Number.isFinite(value) || value <= 0) return;
-    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, tubeRadius: value }));
+  public updatePartMaterialPreset(preset: TMaterialPreset): void {
+    if (!MATERIAL_PRESET_IDS.includes(preset)) return;
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      materialPreset: preset,
+      color: getMaterialPresetDefinition(preset).swatch,
+    }));
+  }
+
+  public updatePartColor(color: string): void {
+    if (!HEX_COLOR_PATTERN.test(color)) return;
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({ ...part, color }));
+  }
+
+  public sculptSelectedPart(): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => {
+      if (isSculptShape(part.shape) && part.sculpt) return part;
+      const mode: TSculptMode = sculptModeForPartShape(part.shape);
+      return {
+        ...part,
+        shape: mode === 'lathe' ? 'lathe-360' : 'extrude-2d',
+        sculpt: this._sculptForPrimitive(part.shape),
+      };
+    });
+    this._saveMessage.set(MESSAGE_SCULPTED);
+  }
+
+  public setSculptMode(mode: TSculptMode): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      shape: mode === 'lathe' ? 'lathe-360' : 'extrude-2d',
+      sculpt: createFurniturePartSculpt(mode, mode === 'lathe' ? 'turned-leg' : 'rectangle'),
+    }));
+    this._saveMessage.set(MESSAGE_SCULPT_UPDATED);
+  }
+
+  public applySculptPreset(presetId: TSculptPresetId): void {
+    const preset = getSculptPreset(presetId);
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      shape: preset.mode === 'lathe' ? 'lathe-360' : 'extrude-2d',
+      sculpt: createFurniturePartSculpt(preset.mode, presetId),
+    }));
+    this._saveMessage.set(MESSAGE_SCULPT_UPDATED);
+  }
+
+  public updateSculptPoints(points: readonly ISculptPoint[]): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => {
+      const mode: TSculptMode = part.sculpt?.mode ?? sculptModeForPartShape(part.shape);
+      return {
+        ...part,
+        sculpt: cloneFurniturePartSculpt({
+          mode,
+          closed: part.sculpt?.closed ?? mode === 'extrude',
+          points: [...points],
+        }),
+      };
+    });
+  }
+
+  public toggleSculptPoint(index: number): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => {
+      const sculpt = this._partSculpt(part);
+      const points = sculpt.points.map((point, pointIndex) =>
+        pointIndex === index
+          ? { ...point, kind: point.kind === 'sharp' ? ('smooth' as const) : ('sharp' as const) }
+          : { ...point },
+      );
+      return { ...part, sculpt: { ...sculpt, points } };
+    });
+    this._saveMessage.set(MESSAGE_SCULPT_UPDATED);
+  }
+
+  public addSculptPoint(index: number): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => {
+      const sculpt = this._partSculpt(part);
+      if (sculpt.points.length >= SCULPT_MAX_POINTS) return part;
+      const current = sculpt.points[index];
+      const next = sculpt.points[(index + 1) % sculpt.points.length];
+      if (!current || !next) return part;
+      const points = [...sculpt.points];
+      points.splice(index + 1, 0, {
+        x: Number(((current.x + next.x) / 2).toFixed(4)),
+        y: Number(((current.y + next.y) / 2).toFixed(4)),
+        kind: 'smooth',
+      });
+      return { ...part, sculpt: { ...sculpt, points } };
+    });
+    this._saveMessage.set(MESSAGE_SCULPT_UPDATED);
+  }
+
+  public removeSculptPoint(index: number): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => {
+      const sculpt = this._partSculpt(part);
+      if (sculpt.points.length <= 3) return part;
+      return {
+        ...part,
+        sculpt: {
+          ...sculpt,
+          points: sculpt.points.filter((_, pointIndex) => pointIndex !== index),
+        },
+      };
+    });
+    this._saveMessage.set(MESSAGE_SCULPT_UPDATED);
+  }
+
+  public dropSelectedToFloor(): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      position: { ...part.position, y: part.dimensions.height / 2 },
+    }));
+    this._saveMessage.set(MESSAGE_DROPPED);
+  }
+
+  public centerSelected(): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      position: { ...part.position, x: 0, z: 0 },
+    }));
+    this._saveMessage.set(MESSAGE_CENTERED);
+  }
+
+  public mirrorSelected(axis: 'x' | 'z'): void {
+    this._updateSelectedPart((part: IFurniturePart): IFurniturePart => ({
+      ...part,
+      position: {
+        ...part.position,
+        [axis]: -part.position[axis],
+      },
+      rotation:
+        axis === 'x'
+          ? { ...part.rotation, y: -part.rotation.y, z: -part.rotation.z }
+          : { ...part.rotation, x: -part.rotation.x, y: -part.rotation.y },
+    }));
+    this._saveMessage.set(`${MESSAGE_MIRRORED}${axis.toUpperCase()}.`);
   }
 
   public toggleMirror(axis: 'x' | 'z'): void {
-    if (axis === AXIS_X) this._mirrorX.update((value: boolean): boolean => !value);
+    if (axis === 'x') this._mirrorX.update((value: boolean): boolean => !value);
     else this._mirrorZ.update((value: boolean): boolean => !value);
   }
 
@@ -350,45 +436,6 @@ export class CraftWorkbenchService {
 
   public setCategory(category: TFurnitureCategory): void {
     this._blueprintCategory.set(category);
-  }
-
-  public addMaterialSlot(): void {
-    const index: number = Object.keys(this._draft().materials).length + 1;
-    const key: string = `${MATERIAL_SLOT_KEY_PREFIX}${index}-${this._catalog.generateId().slice(0, MATERIAL_SLOT_KEY_RANDOM_LENGTH)}`;
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
-      ...blueprint,
-      materials: {
-        ...blueprint.materials,
-        [key]: createFurnitureMaterialSlot(`${DEFAULT_MATERIAL_LABEL_PREFIX}${index}`, DEFAULT_FURNITURE_SLOT_COLOR, DEFAULT_FURNITURE_MATERIAL_FINISH),
-      },
-    }));
-  }
-
-  public removeMaterialSlot(key: string): void {
-    const remaining: [string, IMaterialSlot][] = Object.entries(this._draft().materials).filter(
-      ([slotKey]: [string, IMaterialSlot]): boolean => slotKey !== key
-    );
-    if (remaining.length === 0) return;
-    const fallbackKey: string = remaining[0][0];
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
-      ...blueprint,
-      parts: blueprint.parts.map((part: IFurniturePart): IFurniturePart =>
-        part.materialSlot === key ? { ...part, materialSlot: fallbackKey } : part
-      ),
-      materials: Object.fromEntries(remaining),
-    }));
-  }
-
-  public updateMaterialLabel(key: string, label: string): void {
-    this._updateMaterial(key, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, label }));
-  }
-
-  public updateMaterialColor(key: string, color: string): void {
-    this._updateMaterial(key, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, color }));
-  }
-
-  public updateMaterialFinish(key: string, finish: TMaterialFinish): void {
-    this._updateMaterial(key, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, finish }));
   }
 
   public setThumbnail(dataUrl: string | undefined): void {
@@ -431,7 +478,7 @@ export class CraftWorkbenchService {
         this._isSaving.set(false);
         this._saveMessage.set(SAVE_FAILED_MESSAGE);
         return of(this._draft());
-      })
+      }),
     );
   }
 
@@ -457,20 +504,48 @@ export class CraftWorkbenchService {
     this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => ({
       ...blueprint,
       parts: blueprint.parts.map((part: IFurniturePart): IFurniturePart =>
-        part.id === id ? mutator(part) : part
+        part.id === id ? mutator(part) : part,
       ),
     }));
   }
 
-  private _updateMaterial(key: string, mutator: (slot: IMaterialSlot) => IMaterialSlot): void {
-    this._mutateDraft((blueprint: IFurnitureBlueprint): IFurnitureBlueprint => {
-      const slot: IMaterialSlot | undefined = blueprint.materials[key];
-      if (!slot) return blueprint;
-      return {
-        ...blueprint,
-        materials: { ...blueprint.materials, [key]: mutator(slot) },
-      };
-    });
+  private _sculptForPrimitive(shape: TPartShape): IFurniturePartSculpt {
+    if (shape === 'box') return createFurniturePartSculpt('extrude', 'rectangle');
+    if (shape === 'capsule') return createFurniturePartSculpt('extrude', 'pill');
+
+    const points =
+      shape === 'cone'
+        ? [
+            { x: 1, y: 0, kind: 'sharp' as const },
+            { x: 0.5, y: 0.5, kind: 'sharp' as const },
+            { x: 0, y: 1, kind: 'sharp' as const },
+          ]
+        : shape === 'torus'
+          ? [
+              { x: 0.55, y: 0.4, kind: 'sharp' as const },
+              { x: 1, y: 0.5, kind: 'smooth' as const },
+              { x: 0.55, y: 0.6, kind: 'sharp' as const },
+            ]
+          : [
+              { x: 1, y: 0, kind: 'sharp' as const },
+              { x: 1, y: 0.5, kind: 'sharp' as const },
+              { x: 1, y: 1, kind: 'sharp' as const },
+            ];
+    return {
+      mode: 'lathe',
+      closed: false,
+      points: normalizeSculptPoints(points),
+    };
+  }
+
+  private _partSculpt(part: IFurniturePart): IFurniturePartSculpt {
+    return (
+      cloneFurniturePartSculpt(part.sculpt) ??
+      createFurniturePartSculpt(
+        sculptModeForPartShape(part.shape),
+        part.shape === 'lathe-360' ? 'turned-leg' : 'rectangle',
+      )
+    );
   }
 
   private _toTitleCase(value: string): string {

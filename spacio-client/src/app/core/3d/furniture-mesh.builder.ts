@@ -1,13 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {
-  DEFAULT_BEVEL_RADIUS,
-  DEFAULT_EXTRUDE_POINTS,
   DEFAULT_FURNITURE_MATERIAL_FINISH,
   DEFAULT_FURNITURE_SLOT_COLOR,
-  DEFAULT_LATHE_POINTS,
-  DEFAULT_TUBE_PATH_POINTS,
-  DEFAULT_TUBE_RADIUS,
   FURNITURE_BODY_NAME,
   FURNITURE_FINISH_PBR,
   FURNITURE_GROUP_NAME,
@@ -16,40 +11,35 @@ import {
   FURNITURE_USER_DATA_TYPE,
   GLASS_FINISH_SETTINGS,
   IFurniturePart,
-  IFurniturePoint2D,
-  IFurniturePoint3D,
+  IFurniturePartMaterialOverride,
+  IFurniturePartSculpt,
+  IMaterialPresetDefinition,
   IMaterialSlot,
-  TPartShape,
+  MATERIAL_PRESET_IDS,
+  MATERIAL_PRESET_OPTIONS,
+  cloneFurniturePartSculpt,
+  createFurniturePartSculpt,
+  sculptModeForPartShape,
+  TMaterialFinish,
+  TMaterialPreset,
 } from '@spacio/shared-types';
 
-const CYLINDER_SEGMENTS: number = 24;
-const SPHERE_WIDTH_SEGMENTS: number = 24;
-const SPHERE_HEIGHT_SEGMENTS: number = 16;
-const CAPSULE_CAP_SEGMENTS: number = 8;
-const CAPSULE_RADIAL_SEGMENTS: number = 16;
-const CONE_SEGMENTS: number = 24;
-const TORUS_RADIAL_SEGMENTS: number = 12;
-const TORUS_TUBULAR_SEGMENTS: number = 32;
-const LATHE_SEGMENTS: number = 32;
-const TUBE_SEGMENTS: number = 64;
-const TUBE_RADIAL_SEGMENTS: number = 8;
-const EXTRUDE_CURVE_SEGMENTS: number = 12;
-const ROUNDED_BOX_SEGMENTS: number = 3;
-const LATHE_SMOOTH_SAMPLES: number = 32;
-const MIN_GEOMETRY_SIZE: number = 0.001;
-
-const PART_SHAPE_CYLINDER: TPartShape = 'cylinder';
-const PART_SHAPE_SPHERE: TPartShape = 'sphere';
-const PART_SHAPE_CAPSULE: TPartShape = 'capsule';
-const PART_SHAPE_CONE: TPartShape = 'cone';
-const PART_SHAPE_TORUS: TPartShape = 'torus';
-const PART_SHAPE_ROUNDED_BOX: TPartShape = 'rounded-box';
-const PART_SHAPE_EXTRUDE: TPartShape = 'extrude-2d';
-const PART_SHAPE_LATHE: TPartShape = 'lathe-360';
-const PART_SHAPE_TUBE: TPartShape = 'tube-path';
+const CYLINDER_SEGMENTS = 40;
+const CAPSULE_CAP_SEGMENTS = 10;
+const CAPSULE_RADIAL_SEGMENTS = 24;
+const TORUS_RADIAL_SEGMENTS = 16;
+const TORUS_TUBULAR_SEGMENTS = 48;
+const TURNED_PROFILE_SEGMENTS = 5;
+const ROUNDED_BOX_MIN_SEGMENTS = 3;
+const ROUNDED_BOX_MAX_SEGMENTS = 8;
+const SCULPT_CURVE_SEGMENTS = 10;
+const LATHE_SEGMENTS = 56;
+const MIN_GEOMETRY_SIZE = 0.001;
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 export interface IBuildFurnitureMeshOptions {
   ground?: boolean;
+  partMaterialOverrides?: Record<string, IFurniturePartMaterialOverride>;
 }
 
 interface IPartGeometryResult {
@@ -57,184 +47,365 @@ interface IPartGeometryResult {
   scale: THREE.Vector3;
 }
 
-interface IMappedPoint2D {
-  x: number;
-  y: number;
-  smooth: boolean;
+interface IRadii {
+  top: number;
+  bottom: number;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-function mapRange(value: number, sourceMin: number, sourceMax: number, targetMin: number, targetMax: number): number {
-  if (sourceMax - sourceMin < MIN_GEOMETRY_SIZE) return (targetMin + targetMax) / 2;
-  return targetMin + ((value - sourceMin) / (sourceMax - sourceMin)) * (targetMax - targetMin);
+function normalizeColor(value: string | undefined, fallback: string): string {
+  return value !== undefined && HEX_COLOR_PATTERN.test(value) ? value : fallback;
 }
 
-export function createFurnitureMaterial(slot: IMaterialSlot): THREE.MeshStandardMaterial {
-  const pbr: { roughness: number; metalness: number } = FURNITURE_FINISH_PBR[slot.finish];
-  const material: THREE.MeshStandardMaterial =
-    slot.finish === 'glass'
-      ? new THREE.MeshPhysicalMaterial({
-          color: new THREE.Color(slot.color),
-          roughness: GLASS_FINISH_SETTINGS.roughness,
-          metalness: pbr.metalness,
-          transmission: GLASS_FINISH_SETTINGS.transmission,
-          opacity: GLASS_FINISH_SETTINGS.opacity,
-          ior: GLASS_FINISH_SETTINGS.ior,
-          transparent: true,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        })
-      : new THREE.MeshStandardMaterial({
-          color: new THREE.Color(slot.color),
-          roughness: pbr.roughness,
-          metalness: pbr.metalness,
-        });
-  material.name = slot.label;
+function presetForLegacyFinish(finish: TMaterialFinish): TMaterialPreset {
+  switch (finish) {
+    case 'glass':
+      return 'glass';
+    case 'metallic':
+      return 'brushed-brass';
+    case 'gloss':
+      return 'leather';
+    case 'matte':
+      return 'boucle';
+    default:
+      return 'oak';
+  }
+}
+
+let definitionsById: Map<TMaterialPreset, IMaterialPresetDefinition> | null = null;
+
+function getPreset(preset: TMaterialPreset): IMaterialPresetDefinition {
+  if (!definitionsById) {
+    definitionsById = new Map<TMaterialPreset, IMaterialPresetDefinition>(
+      MATERIAL_PRESET_OPTIONS.map(
+        (definition: IMaterialPresetDefinition): [TMaterialPreset, IMaterialPresetDefinition] => [
+          definition.id,
+          definition,
+        ],
+      ),
+    );
+  }
+  return definitionsById.get(preset) ?? MATERIAL_PRESET_OPTIONS[0];
+}
+
+function getPresetDefinition(
+  preset: TMaterialPreset,
+  fallback: IMaterialPresetDefinition,
+): IMaterialPresetDefinition {
+  return MATERIAL_PRESET_IDS.includes(preset) ? getPreset(preset) : fallback;
+}
+
+function createPhysicalMaterial(
+  definition: IMaterialPresetDefinition,
+  color: string,
+  name: string,
+): THREE.MeshPhysicalMaterial {
+  const material = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(color),
+    roughness: definition.roughness,
+    metalness: definition.metalness,
+    clearcoat: definition.clearcoat,
+    clearcoatRoughness: definition.clearcoatRoughness,
+    sheen: definition.sheen,
+    sheenRoughness: definition.sheenRoughness,
+    transmission: definition.transmission,
+    thickness: definition.thickness,
+    ior: definition.ior,
+    envMapIntensity: definition.envMapIntensity,
+    transparent: definition.transmission > 0,
+    opacity: definition.transmission > 0 ? 1 : 1,
+    depthWrite: definition.transmission === 0,
+    side: definition.transmission > 0 ? THREE.DoubleSide : THREE.FrontSide,
+  });
+  material.name = name;
   return material;
 }
 
-function rotateToSharpStart(points: readonly IFurniturePoint2D[]): IFurniturePoint2D[] {
-  const startIndex: number = points.findIndex((point: IFurniturePoint2D): boolean => point.smooth !== true);
-  const offset: number = startIndex === -1 ? 0 : startIndex;
-  return [...points.slice(offset), ...points.slice(0, offset)];
+export function createFurnitureMaterial(
+  slot: IMaterialSlot,
+  preset: TMaterialPreset | null = null,
+): THREE.MeshStandardMaterial {
+  const finish: TMaterialFinish = slot.finish ?? DEFAULT_FURNITURE_MATERIAL_FINISH;
+  const selectedPreset: TMaterialPreset = preset ?? presetForLegacyFinish(finish);
+  const definition: IMaterialPresetDefinition = getPresetDefinition(
+    selectedPreset,
+    getPreset('oak'),
+  );
+  const legacyPbr = FURNITURE_FINISH_PBR[finish];
+  const roughness: number =
+    preset === null && finish === 'glass' ? GLASS_FINISH_SETTINGS.roughness : definition.roughness;
+  const physical = createPhysicalMaterial(
+    {
+      ...definition,
+      roughness,
+      metalness: preset === null ? legacyPbr.metalness : definition.metalness,
+    },
+    normalizeColor(slot.color, DEFAULT_FURNITURE_SLOT_COLOR),
+    slot.label,
+  );
+  return physical;
 }
 
-function appendSilhouettePath(shape: THREE.Shape, points: readonly IMappedPoint2D[]): void {
-  const first: IMappedPoint2D = points[0];
-  shape.moveTo(first.x, first.y);
-  for (let index: number = 1; index < points.length - 1; index += 1) {
-    const current: IMappedPoint2D = points[index];
-    const next: IMappedPoint2D = points[index + 1];
-    if (current.smooth) shape.quadraticCurveTo(current.x, current.y, next.x, next.y);
-    else shape.lineTo(current.x, current.y);
+export function createFurniturePartMaterial(
+  part: IFurniturePart,
+  override: IFurniturePartMaterialOverride | undefined,
+): THREE.MeshPhysicalMaterial {
+  const selectedPreset: TMaterialPreset =
+    override?.materialPreset !== undefined && MATERIAL_PRESET_IDS.includes(override.materialPreset)
+      ? override.materialPreset
+      : part.materialPreset;
+  const definition: IMaterialPresetDefinition = getPresetDefinition(
+    selectedPreset,
+    getPreset('oak'),
+  );
+  const color: string = normalizeColor(override?.color ?? part.color, definition.swatch);
+  return createPhysicalMaterial(definition, color, part.name);
+}
+
+function radiiFor(radius: number, taper: number, minimumTopRatio: number): IRadii {
+  const amount: number = clamp(taper, -0.5, 0.5);
+  const narrowRatio: number = Math.max(minimumTopRatio, 1 - Math.abs(amount) * 1.8);
+  if (amount >= 0) {
+    return { top: radius * narrowRatio, bottom: radius };
   }
-  const last: IMappedPoint2D = points[points.length - 1];
-  if (last.smooth) shape.quadraticCurveTo(last.x, last.y, first.x, first.y);
-  else shape.lineTo(first.x, first.y);
-  shape.closePath();
+  return { top: radius, bottom: radius * narrowRatio };
 }
 
-function createExtrudeGeometry(part: IFurniturePart, width: number, height: number, depth: number): THREE.BufferGeometry {
-  const source: readonly IFurniturePoint2D[] =
-    part.points2D && part.points2D.length >= 3 ? part.points2D : DEFAULT_EXTRUDE_POINTS;
-  const bounds: IFurniturePoint2D = {
-    x: Math.min(...source.map((point: IFurniturePoint2D): number => point.x)),
-    y: Math.min(...source.map((point: IFurniturePoint2D): number => point.y)),
-  };
-  const maxPoint: IFurniturePoint2D = {
-    x: Math.max(...source.map((point: IFurniturePoint2D): number => point.x)),
-    y: Math.max(...source.map((point: IFurniturePoint2D): number => point.y)),
-  };
-  const maxBevel: number = Math.max(0, Math.min(width, depth, height) / 2 - MIN_GEOMETRY_SIZE);
-  const bevel: number = clamp(part.bevelRadius ?? DEFAULT_BEVEL_RADIUS, 0, maxBevel);
-  const mapped: IMappedPoint2D[] = rotateToSharpStart(source).map((point: IFurniturePoint2D): IMappedPoint2D => ({
-    x: mapRange(point.x, bounds.x, maxPoint.x, -width / 2 + bevel, width / 2 - bevel),
-    y: mapRange(point.y, bounds.y, maxPoint.y, -depth / 2 + bevel, depth / 2 - bevel),
-    smooth: point.smooth === true,
-  }));
+function createTurnedGeometry(
+  bottomRadius: number,
+  topRadius: number,
+  height: number,
+  bevel: number,
+): THREE.BufferGeometry {
+  const maxBevel: number = Math.min(bottomRadius, topRadius, height / 2) * 0.9;
+  const radius: number = clamp(bevel, 0, Math.max(0, maxBevel));
+  const bottomY: number = -height / 2;
+  const topY: number = height / 2;
+  const profile: THREE.Vector2[] = [new THREE.Vector2(0, bottomY)];
 
-  const shape: THREE.Shape = new THREE.Shape();
-  appendSilhouettePath(shape, mapped);
+  if (radius > MIN_GEOMETRY_SIZE) {
+    profile.push(new THREE.Vector2(bottomRadius - radius, bottomY));
+    for (let index = 1; index <= TURNED_PROFILE_SEGMENTS; index += 1) {
+      const angle: number = -Math.PI / 2 + (index / TURNED_PROFILE_SEGMENTS) * (Math.PI / 2);
+      profile.push(
+        new THREE.Vector2(
+          bottomRadius - radius + radius * Math.cos(angle),
+          bottomY + radius + radius * Math.sin(angle),
+        ),
+      );
+    }
+  } else {
+    profile.push(new THREE.Vector2(bottomRadius, bottomY));
+  }
 
-  const bevelThickness: number = Math.min(bevel, Math.max(0, height / 2 - MIN_GEOMETRY_SIZE));
-  const coreDepth: number = Math.max(MIN_GEOMETRY_SIZE, height - bevelThickness * 2);
-  const geometry: THREE.ExtrudeGeometry = new THREE.ExtrudeGeometry(shape, {
-    depth: coreDepth,
-    steps: 1,
-    curveSegments: EXTRUDE_CURVE_SEGMENTS,
-    bevelEnabled: bevelThickness > MIN_GEOMETRY_SIZE / 2,
-    bevelThickness,
-    bevelSize: bevel,
-    bevelSegments: ROUNDED_BOX_SEGMENTS,
-  });
-  geometry.rotateX(Math.PI / 2);
-  geometry.translate(0, height / 2 - bevelThickness, 0);
+  profile.push(new THREE.Vector2(topRadius, topY - radius));
+  if (radius > MIN_GEOMETRY_SIZE) {
+    for (let index = 1; index <= TURNED_PROFILE_SEGMENTS; index += 1) {
+      const angle: number = (index / TURNED_PROFILE_SEGMENTS) * (Math.PI / 2);
+      profile.push(
+        new THREE.Vector2(
+          topRadius - radius + radius * Math.cos(angle),
+          topY - radius + radius * Math.sin(angle),
+        ),
+      );
+    }
+  } else {
+    profile.push(new THREE.Vector2(topRadius, topY));
+  }
+  profile.push(new THREE.Vector2(0, topY));
+
+  const geometry = new THREE.LatheGeometry(profile, CYLINDER_SEGMENTS);
   geometry.computeVertexNormals();
   return geometry;
 }
 
-function createLatheGeometry(part: IFurniturePart, width: number, height: number, depth: number): THREE.BufferGeometry {
-  const source: readonly IFurniturePoint2D[] =
-    part.points2D && part.points2D.length >= 2 ? part.points2D : DEFAULT_LATHE_POINTS;
-  let profile: IFurniturePoint2D[] = [...source].sort(
-    (left: IFurniturePoint2D, right: IFurniturePoint2D): number => left.y - right.y
+function createCapsuleGeometry(
+  part: IFurniturePart,
+  width: number,
+  height: number,
+  depth: number,
+): IPartGeometryResult {
+  const radius: number = Math.max(MIN_GEOMETRY_SIZE, Math.min(width, depth) / 2);
+  const length: number = Math.max(MIN_GEOMETRY_SIZE, height - radius * 2);
+  const geometry = new THREE.CapsuleGeometry(
+    radius,
+    length,
+    CAPSULE_CAP_SEGMENTS,
+    CAPSULE_RADIAL_SEGMENTS,
   );
-
-  if (profile.length >= 3 && profile.some((point: IFurniturePoint2D): boolean => point.smooth === true)) {
-    const curve: THREE.SplineCurve = new THREE.SplineCurve(
-      profile.map((point: IFurniturePoint2D): THREE.Vector2 => new THREE.Vector2(Math.abs(point.x), point.y))
-    );
-    profile = curve.getPoints(LATHE_SMOOTH_SAMPLES).map((point: THREE.Vector2): IFurniturePoint2D => ({
-      x: Math.abs(point.x),
-      y: point.y,
-    }));
+  const radii: IRadii = radiiFor(radius, part.taper, 0.35);
+  const bottomScale: number = radii.bottom / radius;
+  const topScale: number = radii.top / radius;
+  const positions: THREE.BufferAttribute = geometry.getAttribute(
+    'position',
+  ) as THREE.BufferAttribute;
+  for (let index = 0; index < positions.count; index += 1) {
+    const y: number = positions.getY(index);
+    const ratio: number = clamp(y / height + 0.5, 0, 1);
+    const scale: number = bottomScale + (topScale - bottomScale) * ratio;
+    positions.setX(index, positions.getX(index) * scale);
+    positions.setZ(index, positions.getZ(index) * scale);
   }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return {
+    geometry,
+    scale: new THREE.Vector3(width / (radius * 2), 1, depth / (radius * 2)),
+  };
+}
 
-  const maxRadius: number = Math.max(
-    MIN_GEOMETRY_SIZE,
-    ...profile.map((point: IFurniturePoint2D): number => Math.abs(point.x))
-  );
-  const minY: number = Math.min(...profile.map((point: IFurniturePoint2D): number => point.y));
-  const maxY: number = Math.max(...profile.map((point: IFurniturePoint2D): number => point.y));
-  const vectors: THREE.Vector2[] = profile
-    .map((point: IFurniturePoint2D): THREE.Vector2 =>
-      new THREE.Vector2(
-        (Math.abs(point.x) / maxRadius) * (width / 2),
-        mapRange(point.y, minY, maxY, -height / 2, height / 2)
-      )
+function midpoint2d(first: THREE.Vector2, second: THREE.Vector2): THREE.Vector2 {
+  return new THREE.Vector2((first.x + second.x) / 2, (first.y + second.y) / 2);
+}
+
+function resolvePartSculpt(part: IFurniturePart): IFurniturePartSculpt {
+  return (
+    cloneFurniturePartSculpt(part.sculpt) ??
+    createFurniturePartSculpt(
+      sculptModeForPartShape(part.shape),
+      part.shape === 'lathe-360' ? 'turned-leg' : 'rectangle',
     )
-    .sort((left: THREE.Vector2, right: THREE.Vector2): number => left.y - right.y);
-
-  const geometry: THREE.LatheGeometry = new THREE.LatheGeometry(vectors, LATHE_SEGMENTS);
-  geometry.scale(1, 1, depth / width);
-  geometry.computeVertexNormals();
-  return geometry;
+  );
 }
 
-function createTubeGeometry(part: IFurniturePart, width: number, height: number, depth: number): THREE.BufferGeometry {
-  const source: readonly IFurniturePoint3D[] =
-    part.pathPoints3D && part.pathPoints3D.length >= 2 ? part.pathPoints3D : DEFAULT_TUBE_PATH_POINTS;
-  const minPoint: IFurniturePoint3D = {
-    x: Math.min(...source.map((point: IFurniturePoint3D): number => point.x)),
-    y: Math.min(...source.map((point: IFurniturePoint3D): number => point.y)),
-    z: Math.min(...source.map((point: IFurniturePoint3D): number => point.z)),
-  };
-  const maxPoint: IFurniturePoint3D = {
-    x: Math.max(...source.map((point: IFurniturePoint3D): number => point.x)),
-    y: Math.max(...source.map((point: IFurniturePoint3D): number => point.y)),
-    z: Math.max(...source.map((point: IFurniturePoint3D): number => point.z)),
-  };
-  const maxRadius: number = Math.max(MIN_GEOMETRY_SIZE, Math.min(width, height, depth) / 2 - MIN_GEOMETRY_SIZE);
-  const tubeRadius: number = clamp(part.tubeRadius ?? DEFAULT_TUBE_RADIUS, MIN_GEOMETRY_SIZE, maxRadius);
-  const points: THREE.Vector3[] = source.map(
-    (point: IFurniturePoint3D): THREE.Vector3 =>
-      new THREE.Vector3(
-        mapRange(point.x, minPoint.x, maxPoint.x, -width / 2 + tubeRadius, width / 2 - tubeRadius),
-        mapRange(point.y, minPoint.y, maxPoint.y, -height / 2 + tubeRadius, height / 2 - tubeRadius),
-        mapRange(point.z, minPoint.z, maxPoint.z, -depth / 2 + tubeRadius, depth / 2 - tubeRadius)
-      )
+function createSculptShape(
+  sculpt: IFurniturePartSculpt,
+  width: number,
+  height: number,
+): THREE.Shape {
+  const points: THREE.Vector2[] = sculpt.points.map(
+    (point): THREE.Vector2 => new THREE.Vector2((point.x - 0.5) * width, (0.5 - point.y) * height),
   );
-  const isClosed: boolean =
-    points.length > 3 && points[0].distanceTo(points[points.length - 1]) < MIN_GEOMETRY_SIZE;
-  const curvePoints: THREE.Vector3[] = isClosed ? points.slice(0, -1) : points;
-  const curve: THREE.CatmullRomCurve3 = new THREE.CatmullRomCurve3(curvePoints, isClosed, 'catmullrom', 0.5);
-  const geometry: THREE.TubeGeometry = new THREE.TubeGeometry(
-    curve,
-    TUBE_SEGMENTS,
-    tubeRadius,
-    TUBE_RADIAL_SEGMENTS,
-    isClosed
-  );
-  geometry.computeBoundingBox();
-  const bounds: THREE.Box3 | null = geometry.boundingBox;
-  if (bounds) {
-    const center: THREE.Vector3 = bounds.getCenter(new THREE.Vector3());
-    geometry.translate(-center.x, -center.y, -center.z);
+  const shape = new THREE.Shape();
+  if (points.length === 0) {
+    shape.moveTo(-width / 2, -height / 2);
+    shape.lineTo(width / 2, -height / 2);
+    shape.lineTo(width / 2, height / 2);
+    shape.lineTo(-width / 2, height / 2);
+    shape.closePath();
+    return shape;
   }
+
+  const first: THREE.Vector2 = points[0];
+  const last: THREE.Vector2 = points[points.length - 1];
+  const firstKind = sculpt.points[0].kind;
+  const start: THREE.Vector2 = firstKind === 'smooth' ? midpoint2d(first, last) : first;
+  shape.moveTo(start.x, start.y);
+
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const currentKind = sculpt.points[index].kind;
+    const nextKind = sculpt.points[(index + 1) % sculpt.points.length].kind;
+    if (currentKind === 'smooth') {
+      const end: THREE.Vector2 = nextKind === 'smooth' ? midpoint2d(current, next) : next;
+      shape.quadraticCurveTo(current.x, current.y, end.x, end.y);
+      continue;
+    }
+    shape.lineTo(current.x, current.y);
+    if (nextKind === 'smooth') {
+      const mid: THREE.Vector2 = midpoint2d(current, next);
+      shape.lineTo(mid.x, mid.y);
+    } else {
+      shape.lineTo(next.x, next.y);
+    }
+  }
+  shape.closePath();
+  return shape;
+}
+
+function createLatheProfile(
+  sculpt: IFurniturePartSculpt,
+  width: number,
+  height: number,
+): THREE.Vector2[] {
+  const points: THREE.Vector2[] = sculpt.points
+    .map(
+      (point): THREE.Vector2 =>
+        new THREE.Vector2(
+          Math.max(MIN_GEOMETRY_SIZE, point.x * (width / 2)),
+          (0.5 - point.y) * height,
+        ),
+    )
+    .sort((first: THREE.Vector2, second: THREE.Vector2): number => first.y - second.y);
+  if (points.length < 2) return points;
+
+  const hasSmooth: boolean = sculpt.points.some((point): boolean => point.kind === 'smooth');
+  const profile: THREE.Vector2[] = hasSmooth
+    ? new THREE.SplineCurve(points).getPoints((points.length - 1) * SCULPT_CURVE_SEGMENTS)
+    : points;
+  const bottom: THREE.Vector2 = profile[0];
+  const top: THREE.Vector2 = profile[profile.length - 1];
+  return [
+    new THREE.Vector2(Math.max(MIN_GEOMETRY_SIZE, bottom.x * 0.35), bottom.y),
+    ...profile,
+    new THREE.Vector2(Math.max(MIN_GEOMETRY_SIZE, top.x * 0.35), top.y),
+  ];
+}
+
+function applySculptTaper(
+  geometry: THREE.BufferGeometry,
+  taper: number,
+  extent: number,
+  axis: 'y' | 'z',
+): void {
+  const amount: number = clamp(taper, -0.5, 0.5) * 0.6;
+  if (Math.abs(amount) < 0.0001 || extent <= 0) return;
+  const positions: THREE.BufferAttribute = geometry.getAttribute(
+    'position',
+  ) as THREE.BufferAttribute;
+  for (let index = 0; index < positions.count; index += 1) {
+    const coordinate: number = axis === 'y' ? positions.getY(index) : positions.getZ(index);
+    const ratio: number = clamp(coordinate / extent + 0.5, 0, 1);
+    const factor: number = Math.max(0.2, 1 + amount * (ratio - 0.5));
+    positions.setX(index, positions.getX(index) * factor);
+    if (axis === 'y') positions.setZ(index, positions.getZ(index) * factor);
+    else positions.setY(index, positions.getY(index) * factor);
+  }
+  positions.needsUpdate = true;
   geometry.computeVertexNormals();
+}
+
+function createSculptedGeometry(
+  part: IFurniturePart,
+  sculpt: IFurniturePartSculpt,
+  width: number,
+  height: number,
+  depth: number,
+  bevel: number,
+): THREE.BufferGeometry {
+  if (sculpt.mode === 'lathe') {
+    const geometry = new THREE.LatheGeometry(
+      createLatheProfile(sculpt, width, height),
+      LATHE_SEGMENTS,
+    );
+    geometry.computeVertexNormals();
+    applySculptTaper(geometry, part.taper, height, 'y');
+    return geometry;
+  }
+
+  const bevelRadius: number = Math.min(
+    bevel * Math.min(width, height, depth) * 0.35,
+    Math.min(width, height, depth) * 0.22,
+  );
+  const shapeWidth: number = Math.max(MIN_GEOMETRY_SIZE, width - bevelRadius * 2);
+  const shapeHeight: number = Math.max(MIN_GEOMETRY_SIZE, height - bevelRadius * 2);
+  const depthBody: number = Math.max(MIN_GEOMETRY_SIZE, depth - bevelRadius * 2);
+  const geometry = new THREE.ExtrudeGeometry(createSculptShape(sculpt, shapeWidth, shapeHeight), {
+    depth: depthBody,
+    bevelEnabled: bevelRadius > MIN_GEOMETRY_SIZE / 2,
+    bevelThickness: bevelRadius,
+    bevelSize: bevelRadius,
+    bevelSegments: 4,
+    curveSegments: SCULPT_CURVE_SEGMENTS,
+    steps: 1,
+  });
+  geometry.translate(0, 0, -depthBody / 2);
+  geometry.computeVertexNormals();
+  applySculptTaper(geometry, part.taper, depthBody, 'z');
   return geometry;
 }
 
@@ -242,48 +413,46 @@ function createPartGeometry(part: IFurniturePart): IPartGeometryResult {
   const width: number = Math.max(part.dimensions.width, MIN_GEOMETRY_SIZE);
   const height: number = Math.max(part.dimensions.height, MIN_GEOMETRY_SIZE);
   const depth: number = Math.max(part.dimensions.depth, MIN_GEOMETRY_SIZE);
+  const bevel: number = clamp(part.bevel, 0, 1);
 
   switch (part.shape) {
-    case PART_SHAPE_CYLINDER: {
+    case 'cylinder': {
       const radius: number = width / 2;
+      const radii: IRadii = radiiFor(radius, part.taper, 0.12);
+      const bevelRadius: number = bevel * Math.min(radius, height / 2) * 0.9;
       return {
-        geometry: new THREE.CylinderGeometry(radius, radius, height, CYLINDER_SEGMENTS),
+        geometry: createTurnedGeometry(radii.bottom, radii.top, height, bevelRadius),
         scale: new THREE.Vector3(1, 1, depth / width),
       };
     }
-    case PART_SHAPE_SPHERE: {
-      const radius: number = Math.max(width, height, depth) / 2;
+    case 'cone': {
+      const radius: number = width / 2;
+      const radii: IRadii = radiiFor(radius, part.taper, 0.04);
+      const bevelRadius: number = bevel * radius * 0.4;
       return {
-        geometry: new THREE.SphereGeometry(radius, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS),
-        scale: new THREE.Vector3(width / (radius * 2), height / (radius * 2), depth / (radius * 2)),
-      };
-    }
-    case PART_SHAPE_CAPSULE: {
-      const radius: number = Math.min(width, depth) / 2;
-      const length: number = Math.max(MIN_GEOMETRY_SIZE, height - radius * 2);
-      return {
-        geometry: new THREE.CapsuleGeometry(radius, length, CAPSULE_CAP_SEGMENTS, CAPSULE_RADIAL_SEGMENTS),
-        scale: new THREE.Vector3(width / (radius * 2), 1, depth / (radius * 2)),
-      };
-    }
-    case PART_SHAPE_CONE:
-      return {
-        geometry: new THREE.ConeGeometry(width / 2, height, CONE_SEGMENTS),
+        geometry: createTurnedGeometry(radii.bottom, radii.top, height, bevelRadius),
         scale: new THREE.Vector3(1, 1, depth / width),
       };
-    case PART_SHAPE_TORUS: {
+    }
+    case 'capsule':
+      return createCapsuleGeometry(part, width, height, depth);
+    case 'torus': {
       const outerX: number = width / 2;
       const outerZ: number = depth / 2;
-      const tubeRadius: number = Math.max(
+      const baseTube: number = Math.max(
         MIN_GEOMETRY_SIZE,
-        Math.min(height / 2, outerX * 0.4, outerZ * 0.4)
+        Math.min(height / 2, outerX * 0.4, outerZ * 0.4),
       );
-      const majorRadius: number = Math.max(MIN_GEOMETRY_SIZE, Math.min(outerX, outerZ) - tubeRadius);
-      const geometry: THREE.TorusGeometry = new THREE.TorusGeometry(
+      const tubeRadius: number = baseTube * (1 + clamp(part.taper, -0.5, 0.5) * 0.4);
+      const majorRadius: number = Math.max(
+        MIN_GEOMETRY_SIZE,
+        Math.min(outerX, outerZ) - tubeRadius,
+      );
+      const geometry = new THREE.TorusGeometry(
         majorRadius,
         tubeRadius,
         TORUS_RADIAL_SEGMENTS,
-        TORUS_TUBULAR_SEGMENTS
+        TORUS_TUBULAR_SEGMENTS,
       );
       geometry.rotateX(Math.PI / 2);
       return {
@@ -291,64 +460,71 @@ function createPartGeometry(part: IFurniturePart): IPartGeometryResult {
         scale: new THREE.Vector3(
           outerX / (majorRadius + tubeRadius),
           height / (tubeRadius * 2),
-          outerZ / (majorRadius + tubeRadius)
+          outerZ / (majorRadius + tubeRadius),
         ),
       };
     }
-    case PART_SHAPE_ROUNDED_BOX: {
-      const maxBevel: number = Math.max(0, Math.min(width, height, depth) / 2 - MIN_GEOMETRY_SIZE);
-      const bevel: number = clamp(part.bevelRadius ?? DEFAULT_BEVEL_RADIUS, 0, maxBevel);
+    case 'extrude-2d':
+    case 'lathe-360': {
+      const sculpt: IFurniturePartSculpt = resolvePartSculpt(part);
+      return {
+        geometry: createSculptedGeometry(part, sculpt, width, height, depth, bevel),
+        scale: new THREE.Vector3(1, 1, 1),
+      };
+    }
+    case 'box':
+    default: {
+      const bevelRadius: number = bevel * Math.min(width, height, depth) * 0.48;
       const geometry: THREE.BufferGeometry =
-        bevel > MIN_GEOMETRY_SIZE / 2
-          ? new RoundedBoxGeometry(width, height, depth, ROUNDED_BOX_SEGMENTS, bevel)
+        bevelRadius > MIN_GEOMETRY_SIZE / 2
+          ? new RoundedBoxGeometry(
+              width,
+              height,
+              depth,
+              Math.round(
+                ROUNDED_BOX_MIN_SEGMENTS +
+                  bevel * (ROUNDED_BOX_MAX_SEGMENTS - ROUNDED_BOX_MIN_SEGMENTS),
+              ),
+              bevelRadius,
+            )
           : new THREE.BoxGeometry(width, height, depth);
       return { geometry, scale: new THREE.Vector3(1, 1, 1) };
     }
-    case PART_SHAPE_EXTRUDE:
-      return {
-        geometry: createExtrudeGeometry(part, width, height, depth),
-        scale: new THREE.Vector3(1, 1, 1),
-      };
-    case PART_SHAPE_LATHE:
-      return {
-        geometry: createLatheGeometry(part, width, height, depth),
-        scale: new THREE.Vector3(1, 1, 1),
-      };
-    case PART_SHAPE_TUBE:
-      return {
-        geometry: createTubeGeometry(part, width, height, depth),
-        scale: new THREE.Vector3(1, 1, 1),
-      };
-    default:
-      return {
-        geometry: new THREE.BoxGeometry(width, height, depth),
-        scale: new THREE.Vector3(1, 1, 1),
-      };
   }
 }
 
 export function buildFurnitureMesh(
   parts: readonly IFurniturePart[],
   materials: Record<string, IMaterialSlot>,
-  options: IBuildFurnitureMeshOptions = {}
+  options: IBuildFurnitureMeshOptions = {},
 ): THREE.Group {
+  void materials;
   const group: THREE.Group = new THREE.Group();
   group.name = FURNITURE_GROUP_NAME;
   const body: THREE.Group = new THREE.Group();
   body.name = FURNITURE_BODY_NAME;
-  const materialCache: Map<string, THREE.MeshStandardMaterial> = new Map<string, THREE.MeshStandardMaterial>();
+  const materialCache: Map<string, THREE.MeshPhysicalMaterial> = new Map<
+    string,
+    THREE.MeshPhysicalMaterial
+  >();
 
   for (const part of parts) {
-    let material: THREE.MeshStandardMaterial | undefined = materialCache.get(part.materialSlot);
+    const override: IFurniturePartMaterialOverride | undefined =
+      options.partMaterialOverrides?.[part.id];
+    const selectedPreset: TMaterialPreset =
+      override?.materialPreset !== undefined &&
+      MATERIAL_PRESET_IDS.includes(override.materialPreset)
+        ? override.materialPreset
+        : part.materialPreset;
+    const selectedColor: string = normalizeColor(
+      override?.color ?? part.color,
+      getPreset(selectedPreset).swatch,
+    );
+    const cacheKey: string = `${selectedPreset}:${selectedColor}`;
+    let material: THREE.MeshPhysicalMaterial | undefined = materialCache.get(cacheKey);
     if (!material) {
-      const slot: IMaterialSlot = materials[part.materialSlot] ?? {
-        label: part.materialSlot,
-        color: DEFAULT_FURNITURE_SLOT_COLOR,
-        finish: DEFAULT_FURNITURE_MATERIAL_FINISH,
-      };
-      material = createFurnitureMaterial(slot);
-      material.name = part.materialSlot;
-      materialCache.set(part.materialSlot, material);
+      material = createFurniturePartMaterial(part, override);
+      materialCache.set(cacheKey, material);
     }
 
     const geometryResult: IPartGeometryResult = createPartGeometry(part);
@@ -358,12 +534,15 @@ export function buildFurnitureMesh(
     mesh.rotation.set(
       THREE.MathUtils.degToRad(part.rotation.x),
       THREE.MathUtils.degToRad(part.rotation.y),
-      THREE.MathUtils.degToRad(part.rotation.z)
+      THREE.MathUtils.degToRad(part.rotation.z),
     );
     mesh.scale.copy(geometryResult.scale);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.userData = { type: FURNITURE_PART_USER_DATA_TYPE, [FURNITURE_PART_ID_USER_DATA_KEY]: part.id };
+    mesh.userData = {
+      type: FURNITURE_PART_USER_DATA_TYPE,
+      [FURNITURE_PART_ID_USER_DATA_KEY]: part.id,
+    };
     body.add(mesh);
   }
 
@@ -389,7 +568,8 @@ export function disposeFurnitureGroup(group: THREE.Group): void {
     const mesh: THREE.Mesh = object as THREE.Mesh;
     if (!mesh.isMesh) return;
     mesh.geometry?.dispose();
-    const material: THREE.Material | THREE.Material[] | undefined = mesh.material as THREE.Material | THREE.Material[] | undefined;
+    const material: THREE.Material | THREE.Material[] | undefined = mesh.material as
+      THREE.Material | THREE.Material[] | undefined;
     if (!material) return;
     const materials: THREE.Material[] = Array.isArray(material) ? material : [material];
     for (const item of materials) {

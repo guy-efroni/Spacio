@@ -1,0 +1,102 @@
+<section class="sculptor">
+  <header class="sculptor__header">
+    <div>
+      <span class="sculptor__eyebrow">Silhouette sculptor</span>
+      <h3>Shape the outline</h3>
+    </div>
+    <button
+      type="button"
+      class="sculptor__close"
+      aria-label="Close silhouette sculptor"
+      (click)="close()"
+    >
+      ×
+    </button>
+  </header>
+
+  <div class="sculptor__modes" role="group" aria-label="Sculpt mode">
+    <button
+      type="button"
+      class="sculptor__mode"
+      [class.sculptor__mode--active]="mode === 'extrude'"
+      (click)="setMode('extrude')"
+    >
+      Extrude 2D
+    </button>
+    <button
+      type="button"
+      class="sculptor__mode"
+      [class.sculptor__mode--active]="mode === 'lathe'"
+      (click)="setMode('lathe')"
+    >
+      Lathe 360°
+    </button>
+  </div>
+
+  <div class="sculptor__presets">
+    @for (preset of presets; track preset.id) {
+      <button type="button" class="sculptor__preset" (click)="selectPreset(preset.id)">
+        {{ preset.label }}
+      </button>
+    }
+  </div>
+
+  <div class="sculptor__canvas-wrap">
+    <svg
+      #pad
+      class="sculptor__pad"
+      viewBox="0 0 320 220"
+      preserveAspectRatio="xMidYMid meet"
+      (pointermove)="onPointerMove($event)"
+      (pointerup)="onPointerUp($event)"
+      (pointercancel)="onPointerUp($event)"
+    >
+      <defs>
+        <pattern id="sculpt-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path
+            d="M 20 0 L 0 0 0 20"
+            fill="none"
+            stroke="rgba(255,255,255,0.07)"
+            stroke-width="1"
+          />
+        </pattern>
+        <pattern id="sculpt-grid-major" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#sculpt-grid)" />
+          <path
+            d="M 100 0 L 0 0 0 100"
+            fill="none"
+            stroke="rgba(203,182,138,0.14)"
+            stroke-width="1"
+          />
+        </pattern>
+      </defs>
+      <rect x="0" y="0" width="320" height="220" fill="url(#sculpt-grid-major)" />
+      <path class="sculptor__outline" [attr.d]="path()" />
+      @for (index of segments(); track $index) {
+        <circle
+          class="sculptor__midpoint"
+          [attr.cx]="midpointX(index)"
+          [attr.cy]="midpointY(index)"
+          r="4"
+          (click)="addPoint(index)"
+        />
+      }
+      @for (point of pointsView(); track $index) {
+        <circle
+          class="sculptor__point"
+          [class.sculptor__point--smooth]="point.kind === 'smooth'"
+          [attr.cx]="pointX(point)"
+          [attr.cy]="pointY(point)"
+          r="6"
+          (pointerdown)="startDrag($event, $index)"
+          (dblclick)="removePoint($index)"
+        />
+      }
+    </svg>
+  </div>
+
+  <footer class="sculptor__footer">
+    <span>Drag points · click edge to add · click point for corner · double-click to remove</span>
+    <span class="sculptor__badge">Live 3D</span>
+  </footer>
+</section>

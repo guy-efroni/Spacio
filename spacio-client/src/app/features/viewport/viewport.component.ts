@@ -165,7 +165,8 @@ export class ViewportComponent implements OnDestroy {
   protected readonly isPlacingFurnitureMode: WritableSignal<boolean> = signal<boolean>(false);
   public readonly isDrawingModePublic: Signal<boolean> = this.isDrawingMode.asReadonly();
   public readonly isRulerModePublic: Signal<boolean> = this.isRulerMode.asReadonly();
-  public readonly isPlacingFurnitureModePublic: Signal<boolean> = this.isPlacingFurnitureMode.asReadonly();
+  public readonly isPlacingFurnitureModePublic: Signal<boolean> =
+    this.isPlacingFurnitureMode.asReadonly();
 
   private _renderer?: THREE.WebGLRenderer;
   private _scene?: THREE.Scene;
@@ -177,8 +178,14 @@ export class ViewportComponent implements OnDestroy {
   private readonly _wallsGroup: THREE.Group = new THREE.Group();
   private readonly _floorsGroup: THREE.Group = new THREE.Group();
   private readonly _furnitureGroup: THREE.Group = new THREE.Group();
-  private readonly _furnitureInstances: Map<string, IFurnitureInstance> = new Map<string, IFurnitureInstance>();
-  private readonly _furnitureSelectionOutlines: Map<string, THREE.BoxHelper> = new Map<string, THREE.BoxHelper>();
+  private readonly _furnitureInstances: Map<string, IFurnitureInstance> = new Map<
+    string,
+    IFurnitureInstance
+  >();
+  private readonly _furnitureSelectionOutlines: Map<string, THREE.BoxHelper> = new Map<
+    string,
+    THREE.BoxHelper
+  >();
 
   private _floorMesh?: THREE.Mesh;
   private _floorMaterial?: THREE.MeshStandardMaterial;
@@ -186,13 +193,17 @@ export class ViewportComponent implements OnDestroy {
 
   private readonly _raycaster: THREE.Raycaster = new THREE.Raycaster();
   private readonly _mouse: THREE.Vector2 = new THREE.Vector2();
-  private readonly _floorPlane: THREE.Plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -VIEWPORT_ROOM_FLOOR_TOP_Y);
+  private readonly _floorPlane: THREE.Plane = new THREE.Plane(
+    new THREE.Vector3(0, 1, 0),
+    -VIEWPORT_ROOM_FLOOR_TOP_Y,
+  );
   private readonly _intersectionPoint: THREE.Vector3 = new THREE.Vector3();
 
   private _drawingStartPoint: IRulerPoint | null = null;
   private _pointerDownPosition: IRulerPoint | null = null;
   protected readonly ghostBadgeLength: WritableSignal<string> = signal<string>('');
-  protected readonly ghostBadgePosition: WritableSignal<IRulerPoint | null> = signal<IRulerPoint | null>(null);
+  protected readonly ghostBadgePosition: WritableSignal<IRulerPoint | null> =
+    signal<IRulerPoint | null>(null);
   private _previewLine?: THREE.Line;
   private _previewGeometry?: THREE.BufferGeometry;
   private _previewMaterial?: THREE.LineBasicMaterial;
@@ -210,22 +221,30 @@ export class ViewportComponent implements OnDestroy {
   private _rulerMarkerGeometry?: THREE.SphereGeometry;
   private _rulerMarkerMaterial?: THREE.MeshBasicMaterial;
   protected readonly rulerBadgeLength: WritableSignal<string> = signal<string>('');
-  protected readonly rulerBadgePosition: WritableSignal<IRulerPoint | null> = signal<IRulerPoint | null>(null);
+  protected readonly rulerBadgePosition: WritableSignal<IRulerPoint | null> =
+    signal<IRulerPoint | null>(null);
   private _rulerPhase: RulerPhase = RulerPhase.Idle;
 
-  private readonly _pendingBlueprint: WritableSignal<IFurnitureBlueprint | null> = signal<IFurnitureBlueprint | null>(null);
+  private readonly _pendingBlueprint: WritableSignal<IFurnitureBlueprint | null> =
+    signal<IFurnitureBlueprint | null>(null);
   private _pendingFurnitureRotationY: number = 0;
   private _furnitureGhost: IFurnitureGhost | null = null;
 
-  private readonly _onPointerDown: (event: PointerEvent) => void = (event: PointerEvent): void => this._handlePointerDown(event);
-  private readonly _onPointerMove: (event: PointerEvent) => void = (event: PointerEvent): void => this._handlePointerMove(event);
-  private readonly _onPointerUp: (event: PointerEvent) => void = (event: PointerEvent): void => this._handlePointerUp(event);
+  private readonly _onPointerDown: (event: PointerEvent) => void = (event: PointerEvent): void =>
+    this._handlePointerDown(event);
+  private readonly _onPointerMove: (event: PointerEvent) => void = (event: PointerEvent): void =>
+    this._handlePointerMove(event);
+  private readonly _onPointerUp: (event: PointerEvent) => void = (event: PointerEvent): void =>
+    this._handlePointerUp(event);
   private readonly _onPointerCancel: () => void = (): void => {
     this._pointerDownPosition = null;
   };
-  private readonly _onContextMenu: (event: MouseEvent) => void = (event: MouseEvent): void => this._handleContextMenu(event);
-  private readonly _onKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void => this._handleKeyDown(event);
-  private readonly _onDoubleClick: (event: MouseEvent) => void = (event: MouseEvent): void => this._onCanvasDoubleClick(event);
+  private readonly _onContextMenu: (event: MouseEvent) => void = (event: MouseEvent): void =>
+    this._handleContextMenu(event);
+  private readonly _onKeyDown: (event: KeyboardEvent) => void = (event: KeyboardEvent): void =>
+    this._handleKeyDown(event);
+  private readonly _onDoubleClick: (event: MouseEvent) => void = (event: MouseEvent): void =>
+    this._onCanvasDoubleClick(event);
 
   public constructor() {
     this._wallsGroup.name = WALLS_ROOT_GROUP_NAME;
@@ -235,13 +254,15 @@ export class ViewportComponent implements OnDestroy {
     effect((): void => {
       const walls: readonly IWallSegment[] = this.floorplanService.walls();
       const selectedWallId: string | null = this.floorplanService.selectedWallId();
-      const openings: readonly import('@spacio/shared-types').IWallOpening[] = this.floorplanService.openings();
+      const openings: readonly import('@spacio/shared-types').IWallOpening[] =
+        this.floorplanService.openings();
       if (!this._scene) return;
       this._syncWalls(walls, selectedWallId, openings);
     });
 
     effect((): void => {
-      const polygon: readonly { x: number; y: number }[] | null = this.floorplanService.floorPolygon();
+      const polygon: readonly { x: number; y: number }[] | null =
+        this.floorplanService.floorPolygon();
       if (!this._scene) return;
       this._syncFloors(polygon);
     });
@@ -258,8 +279,15 @@ export class ViewportComponent implements OnDestroy {
       this._initializeThreeJS();
       this._startAnimationLoop();
       this._setupResizeObserver();
-      this._syncWalls(this.floorplanService.walls(), this.floorplanService.selectedWallId(), this.floorplanService.openings());
-      this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
+      this._syncWalls(
+        this.floorplanService.walls(),
+        this.floorplanService.selectedWallId(),
+        this.floorplanService.openings(),
+      );
+      this._syncFurniture(
+        this.floorplanService.furniture(),
+        this.floorplanService.selectedFurnitureId(),
+      );
     });
   }
 
@@ -311,7 +339,10 @@ export class ViewportComponent implements OnDestroy {
     if (selectedFurnitureId) {
       this.floorplanService.removeFurniture(selectedFurnitureId);
       this.floorplanService.selectFurniture(null);
-      this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
+      this._syncFurniture(
+        this.floorplanService.furniture(),
+        this.floorplanService.selectedFurnitureId(),
+      );
     }
   }
 
@@ -384,7 +415,9 @@ export class ViewportComponent implements OnDestroy {
 
   private _initializeThreeJS(): void {
     const hostElement: HTMLElement = this._elementRef.nativeElement;
-    const container: HTMLElement = hostElement.querySelector(VIEWPORT_CONTAINER_SELECTOR) as HTMLElement;
+    const container: HTMLElement = hostElement.querySelector(
+      VIEWPORT_CONTAINER_SELECTOR,
+    ) as HTMLElement;
 
     this._renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -395,8 +428,10 @@ export class ViewportComponent implements OnDestroy {
     container.appendChild(this._renderer.domElement);
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, VIEWPORT_MAX_PIXEL_RATIO));
 
-    const initialWidth: number = hostElement.clientWidth > 0 ? hostElement.clientWidth : DEFAULT_INITIAL_WIDTH;
-    const initialHeight: number = hostElement.clientHeight > 0 ? hostElement.clientHeight : DEFAULT_INITIAL_HEIGHT;
+    const initialWidth: number =
+      hostElement.clientWidth > 0 ? hostElement.clientWidth : DEFAULT_INITIAL_WIDTH;
+    const initialHeight: number =
+      hostElement.clientHeight > 0 ? hostElement.clientHeight : DEFAULT_INITIAL_HEIGHT;
 
     this._renderer.setSize(initialWidth, initialHeight);
     this._renderer.shadowMap.enabled = true;
@@ -413,10 +448,18 @@ export class ViewportComponent implements OnDestroy {
       VIEWPORT_CAMERA_FOV,
       initialWidth / initialHeight,
       VIEWPORT_CAMERA_NEAR,
-      VIEWPORT_CAMERA_FAR
+      VIEWPORT_CAMERA_FAR,
     );
-    this._camera.position.set(VIEWPORT_CAMERA_POSITION.x, VIEWPORT_CAMERA_POSITION.y, VIEWPORT_CAMERA_POSITION.z);
-    this._camera.lookAt(VIEWPORT_CAMERA_LOOK_AT.x, VIEWPORT_CAMERA_LOOK_AT.y, VIEWPORT_CAMERA_LOOK_AT.z);
+    this._camera.position.set(
+      VIEWPORT_CAMERA_POSITION.x,
+      VIEWPORT_CAMERA_POSITION.y,
+      VIEWPORT_CAMERA_POSITION.z,
+    );
+    this._camera.lookAt(
+      VIEWPORT_CAMERA_LOOK_AT.x,
+      VIEWPORT_CAMERA_LOOK_AT.y,
+      VIEWPORT_CAMERA_LOOK_AT.z,
+    );
 
     this._controls = new OrbitControls(this._camera, this._renderer.domElement);
     this._controls.enableDamping = true;
@@ -437,31 +480,31 @@ export class ViewportComponent implements OnDestroy {
       VIEWPORT_GRID_SIZE,
       VIEWPORT_GRID_DIVISIONS,
       VIEWPORT_GRID_COLOR_CENTER_LINE,
-      VIEWPORT_GRID_COLOR_GRID
+      VIEWPORT_GRID_COLOR_GRID,
     );
     this._scene.add(gridHelper);
 
     const ambientLight: THREE.AmbientLight = new THREE.AmbientLight(
       VIEWPORT_AMBIENT_LIGHT_COLOR,
-      VIEWPORT_AMBIENT_LIGHT_INTENSITY
+      VIEWPORT_AMBIENT_LIGHT_INTENSITY,
     );
     this._scene.add(ambientLight);
 
     const hemisphereLight: THREE.HemisphereLight = new THREE.HemisphereLight(
       VIEWPORT_HEMISPHERE_LIGHT_SKY_COLOR,
       VIEWPORT_HEMISPHERE_LIGHT_GROUND_COLOR,
-      VIEWPORT_HEMISPHERE_LIGHT_INTENSITY
+      VIEWPORT_HEMISPHERE_LIGHT_INTENSITY,
     );
     this._scene.add(hemisphereLight);
 
     const directionalLight: THREE.DirectionalLight = new THREE.DirectionalLight(
       VIEWPORT_DIRECTIONAL_LIGHT_COLOR,
-      VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY
+      VIEWPORT_DIRECTIONAL_LIGHT_INTENSITY,
     );
     directionalLight.position.set(
       VIEWPORT_DIRECTIONAL_LIGHT_POSITION.x,
       VIEWPORT_DIRECTIONAL_LIGHT_POSITION.y,
-      VIEWPORT_DIRECTIONAL_LIGHT_POSITION.z
+      VIEWPORT_DIRECTIONAL_LIGHT_POSITION.z,
     );
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = VIEWPORT_SHADOW_MAP_SIZE;
@@ -475,7 +518,10 @@ export class ViewportComponent implements OnDestroy {
     directionalLight.shadow.bias = VIEWPORT_SHADOW_BIAS;
     this._scene.add(directionalLight);
 
-    const planeGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(VIEWPORT_FLOOR_SIZE, VIEWPORT_FLOOR_SIZE);
+    const planeGeometry: THREE.PlaneGeometry = new THREE.PlaneGeometry(
+      VIEWPORT_FLOOR_SIZE,
+      VIEWPORT_FLOOR_SIZE,
+    );
     const planeMaterial: THREE.MeshStandardMaterial = new THREE.MeshStandardMaterial({
       color: VIEWPORT_FLOOR_COLOR,
       roughness: VIEWPORT_FLOOR_ROUGHNESS,
@@ -491,15 +537,25 @@ export class ViewportComponent implements OnDestroy {
     this._scene.add(this._wallsGroup);
     this._scene.add(this._furnitureGroup);
     this._setupPreviewLine();
-    this._syncWalls(this.floorplanService.walls(), this.floorplanService.selectedWallId(), this.floorplanService.openings());
+    this._syncWalls(
+      this.floorplanService.walls(),
+      this.floorplanService.selectedWallId(),
+      this.floorplanService.openings(),
+    );
     this._syncFloors(this.floorplanService.floorPolygon());
-    this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
+    this._syncFurniture(
+      this.floorplanService.furniture(),
+      this.floorplanService.selectedFurnitureId(),
+    );
   }
 
   private _setupPreviewLine(): void {
     if (!this._scene) return;
     this._previewGeometry = new THREE.BufferGeometry();
-    this._previewGeometry.setAttribute(POSITION_ATTRIBUTE_NAME, new THREE.BufferAttribute(new Float32Array(6), 3));
+    this._previewGeometry.setAttribute(
+      POSITION_ATTRIBUTE_NAME,
+      new THREE.BufferAttribute(new Float32Array(6), 3),
+    );
     this._previewMaterial = new THREE.LineBasicMaterial({
       color: VIEWPORT_PREVIEW_LINE_COLOR,
       transparent: true,
@@ -567,7 +623,10 @@ export class ViewportComponent implements OnDestroy {
     if (!downPosition || !isPrimaryClick) return;
     if (this.isDrawingMode() || this.isRulerMode() || this.isPlacingFurnitureMode()) return;
 
-    const dragDistance: number = Math.hypot(event.clientX - downPosition.x, event.clientY - downPosition.y);
+    const dragDistance: number = Math.hypot(
+      event.clientX - downPosition.x,
+      event.clientY - downPosition.y,
+    );
     if (dragDistance > VIEWPORT_CLICK_DRAG_THRESHOLD_PX) return;
 
     const furnitureId: string | null = this._pickFurnitureId(event.clientX, event.clientY);
@@ -598,7 +657,8 @@ export class ViewportComponent implements OnDestroy {
     const start: { x: number; y: number } = this._drawingStartPoint;
     const end: { x: number; y: number } = point;
     const isZeroLength: boolean =
-      Math.abs(start.x - end.x) < WALL_PLACEMENT_EPSILON && Math.abs(start.y - end.y) < WALL_PLACEMENT_EPSILON;
+      Math.abs(start.x - end.x) < WALL_PLACEMENT_EPSILON &&
+      Math.abs(start.y - end.y) < WALL_PLACEMENT_EPSILON;
     if (!isZeroLength) {
       const wall: IWallSegment = {
         id: this._generateWallId(),
@@ -621,11 +681,18 @@ export class ViewportComponent implements OnDestroy {
     const point: IFloorPlacementPoint | null = this._getFurniturePlacementPoint(event);
     if (!point) return;
 
-    const item: IPlacedFurniture = this.floorplanService.createFurnitureFromBlueprint(blueprint, { x: point.x, y: 0, z: point.y });
+    const item: IPlacedFurniture = this.floorplanService.createFurnitureFromBlueprint(blueprint, {
+      x: point.x,
+      y: 0,
+      z: point.y,
+    });
     item.rotationY = this._pendingFurnitureRotationY;
 
     this.floorplanService.addFurniture(item);
-    this._syncFurniture(this.floorplanService.furniture(), this.floorplanService.selectedFurnitureId());
+    this._syncFurniture(
+      this.floorplanService.furniture(),
+      this.floorplanService.selectedFurnitureId(),
+    );
 
     this._removeFurnitureGhost();
     this._pendingBlueprint.set(null);
@@ -660,7 +727,8 @@ export class ViewportComponent implements OnDestroy {
     this._mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     this._raycaster.setFromCamera(this._mouse, this._camera);
-    const intersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObjects(this._wallsGroup.children, true);
+    const intersections: readonly THREE.Intersection<THREE.Object3D>[] =
+      this._raycaster.intersectObjects(this._wallsGroup.children, true);
 
     for (const intersection of intersections) {
       const userData: ISceneObjectUserData = intersection.object.userData as ISceneObjectUserData;
@@ -678,7 +746,8 @@ export class ViewportComponent implements OnDestroy {
     this._mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this._mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     this._raycaster.setFromCamera(this._mouse, this._camera);
-    const intersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObjects(this._furnitureGroup.children, true);
+    const intersections: readonly THREE.Intersection<THREE.Object3D>[] =
+      this._raycaster.intersectObjects(this._furnitureGroup.children, true);
     for (const intersection of intersections) {
       let obj: THREE.Object3D | null = intersection.object;
       while (obj) {
@@ -733,7 +802,9 @@ export class ViewportComponent implements OnDestroy {
     if (this.isDrawingMode() || this.isRulerMode() || this.isPlacingFurnitureMode()) return;
     if (this._isEditableTarget(event.target)) return;
 
-    const hasSelection: boolean = this.floorplanService.selectedWallId() !== null || this.floorplanService.selectedFurnitureId() !== null;
+    const hasSelection: boolean =
+      this.floorplanService.selectedWallId() !== null ||
+      this.floorplanService.selectedFurnitureId() !== null;
     if (!hasSelection) return;
     event.preventDefault();
     this.onDeleteSelectedWall();
@@ -750,7 +821,12 @@ export class ViewportComponent implements OnDestroy {
   private _isEditableTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
     const tagName: string = target.tagName;
-    return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || target.isContentEditable;
+    return (
+      tagName === 'INPUT' ||
+      tagName === 'TEXTAREA' ||
+      tagName === 'SELECT' ||
+      target.isContentEditable
+    );
   }
 
   private _finishDrawing(): void {
@@ -810,7 +886,10 @@ export class ViewportComponent implements OnDestroy {
     if (!this._scene) return;
     this._removeRulerLine();
     this._rulerLineGeometry = new THREE.BufferGeometry();
-    this._rulerLineGeometry.setAttribute(POSITION_ATTRIBUTE_NAME, new THREE.BufferAttribute(new Float32Array(6), 3));
+    this._rulerLineGeometry.setAttribute(
+      POSITION_ATTRIBUTE_NAME,
+      new THREE.BufferAttribute(new Float32Array(6), 3),
+    );
     this._rulerLineMaterial = new THREE.LineDashedMaterial({
       color: RULER_LINE_COLOR,
       transparent: true,
@@ -826,9 +905,17 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _updateRulerLine(end: { x: number; y: number }): void {
-    if (!this._rulerStartPoint || !this._rulerLineGeometry || !this._rulerLine || !this._rulerLineMaterial) return;
+    if (
+      !this._rulerStartPoint ||
+      !this._rulerLineGeometry ||
+      !this._rulerLine ||
+      !this._rulerLineMaterial
+    )
+      return;
     const start: IRulerPoint = this._rulerStartPoint;
-    const positionAttribute: THREE.BufferAttribute = this._rulerLineGeometry.getAttribute('position') as THREE.BufferAttribute;
+    const positionAttribute: THREE.BufferAttribute = this._rulerLineGeometry.getAttribute(
+      'position',
+    ) as THREE.BufferAttribute;
     const array: Float32Array = positionAttribute.array as Float32Array;
     const yPos: number = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
     array[0] = start.x;
@@ -858,7 +945,11 @@ export class ViewportComponent implements OnDestroy {
     if (!this._scene) return;
     this._removeRulerMarkers();
     this._rulerMarkerGeometry = new THREE.SphereGeometry(RULER_MARKER_SIZE, 16, 16);
-    this._rulerMarkerMaterial = new THREE.MeshBasicMaterial({ color: RULER_MARKER_COLOR, transparent: true, opacity: 0.9 });
+    this._rulerMarkerMaterial = new THREE.MeshBasicMaterial({
+      color: RULER_MARKER_COLOR,
+      transparent: true,
+      opacity: 0.9,
+    });
     this._rulerStartMarker = new THREE.Mesh(this._rulerMarkerGeometry, this._rulerMarkerMaterial);
     this._rulerStartMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
     this._rulerStartMarker.name = RULER_START_MARKER_NAME;
@@ -870,7 +961,8 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _updateRulerEndMarker(point: { x: number; y: number }): void {
-    if (this._rulerEndMarker) this._rulerEndMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
+    if (this._rulerEndMarker)
+      this._rulerEndMarker.position.set(point.x, RULER_MARKER_HEIGHT, point.y);
   }
 
   private _removeRulerMarkers(): void {
@@ -891,7 +983,11 @@ export class ViewportComponent implements OnDestroy {
     const length: number = Math.hypot(dx, dz);
     const midX: number = (start.x + end.x) / 2;
     const midZ: number = (start.y + end.y) / 2;
-    const projection: { x: number; y: number } | null = this._projectToScreen(midX, RULER_BADGE_HEIGHT_OFFSET, midZ);
+    const projection: { x: number; y: number } | null = this._projectToScreen(
+      midX,
+      RULER_BADGE_HEIGHT_OFFSET,
+      midZ,
+    );
     if (!projection) return;
     this.rulerBadgeLength.set(`${length.toFixed(2)}m`);
     this.rulerBadgePosition.set(projection);
@@ -910,10 +1006,14 @@ export class ViewportComponent implements OnDestroy {
     this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     this._raycaster.setFromCamera(this._mouse, this._camera);
 
-    const planeIntersection: THREE.Vector3 | null = this._raycaster.ray.intersectPlane(this._floorPlane, this._intersectionPoint);
+    const planeIntersection: THREE.Vector3 | null = this._raycaster.ray.intersectPlane(
+      this._floorPlane,
+      this._intersectionPoint,
+    );
     let hitPoint: THREE.Vector3 | null = planeIntersection;
     if (!hitPoint && this._floorMesh) {
-      const floorIntersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObject(this._floorMesh, false);
+      const floorIntersections: readonly THREE.Intersection<THREE.Object3D>[] =
+        this._raycaster.intersectObject(this._floorMesh, false);
       if (floorIntersections.length > 0) hitPoint = floorIntersections[0].point;
     }
     if (!hitPoint) return null;
@@ -931,7 +1031,8 @@ export class ViewportComponent implements OnDestroy {
     this._raycaster.setFromCamera(this._mouse, this._camera);
 
     if (this._floorMesh) {
-      const floorIntersections: readonly THREE.Intersection<THREE.Object3D>[] = this._raycaster.intersectObject(this._floorMesh, false);
+      const floorIntersections: readonly THREE.Intersection<THREE.Object3D>[] =
+        this._raycaster.intersectObject(this._floorMesh, false);
       if (floorIntersections.length > 0) {
         const hit: THREE.Vector3 = floorIntersections[0].point;
         const x: number = this._snapToGrid(hit.x);
@@ -940,7 +1041,10 @@ export class ViewportComponent implements OnDestroy {
       }
     }
 
-    const intersection: THREE.Vector3 | null = this._raycaster.ray.intersectPlane(this._floorPlane, this._intersectionPoint);
+    const intersection: THREE.Vector3 | null = this._raycaster.ray.intersectPlane(
+      this._floorPlane,
+      this._intersectionPoint,
+    );
     if (!intersection) return null;
     const x: number = this._snapToGrid(this._intersectionPoint.x);
     const z: number = this._snapToGrid(this._intersectionPoint.z);
@@ -969,7 +1073,11 @@ export class ViewportComponent implements OnDestroy {
     const length: number = Math.hypot(dx, dz);
     const midX: number = (start.x + end.x) / 2;
     const midZ: number = (start.y + end.y) / 2;
-    const projection: { x: number; y: number } | null = this._projectToScreen(midX, VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET + 0.5, midZ);
+    const projection: { x: number; y: number } | null = this._projectToScreen(
+      midX,
+      VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET + 0.5,
+      midZ,
+    );
     if (!projection) return;
     this.ghostBadgeLength.set(`${length.toFixed(1)}m`);
     this.ghostBadgePosition.set(projection);
@@ -982,7 +1090,9 @@ export class ViewportComponent implements OnDestroy {
 
   private _updatePreviewLine(start: { x: number; y: number }, end: { x: number; y: number }): void {
     if (!this._previewGeometry || !this._previewLine) return;
-    const positionAttribute: THREE.BufferAttribute = this._previewGeometry.getAttribute(POSITION_ATTRIBUTE_NAME) as THREE.BufferAttribute;
+    const positionAttribute: THREE.BufferAttribute = this._previewGeometry.getAttribute(
+      POSITION_ATTRIBUTE_NAME,
+    ) as THREE.BufferAttribute;
     const array: Float32Array = positionAttribute.array as Float32Array;
     array[0] = start.x;
     array[1] = VIEWPORT_PREVIEW_LINE_HEIGHT_OFFSET;
@@ -999,7 +1109,10 @@ export class ViewportComponent implements OnDestroy {
     if (this._previewLine) this._previewLine.visible = false;
   }
 
-  private _createGhostWallMesh(start: { x: number; y: number }, end: { x: number; y: number }): void {
+  private _createGhostWallMesh(
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+  ): void {
     if (!this._scene) return;
     this._removeGhostWallMesh();
     this._ghostWallGeometry = new THREE.BoxGeometry(1, DEFAULT_WALL_HEIGHT, DEFAULT_WALL_THICKNESS);
@@ -1018,7 +1131,10 @@ export class ViewportComponent implements OnDestroy {
     this._updateGhostWallMesh(start, end);
   }
 
-  private _updateGhostWallMesh(start: { x: number; y: number }, end: { x: number; y: number }): void {
+  private _updateGhostWallMesh(
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+  ): void {
     if (!this._ghostWallMesh || !this._ghostWallGeometry) return;
     const dx: number = end.x - start.x;
     const dz: number = end.y - start.y;
@@ -1028,7 +1144,11 @@ export class ViewportComponent implements OnDestroy {
       return;
     }
     this._ghostWallGeometry.dispose();
-    this._ghostWallGeometry = new THREE.BoxGeometry(length, DEFAULT_WALL_HEIGHT, DEFAULT_WALL_THICKNESS);
+    this._ghostWallGeometry = new THREE.BoxGeometry(
+      length,
+      DEFAULT_WALL_HEIGHT,
+      DEFAULT_WALL_THICKNESS,
+    );
     this._ghostWallMesh.geometry = this._ghostWallGeometry;
     const midX: number = (start.x + end.x) / 2;
     const midZ: number = (start.y + end.y) / 2;
@@ -1055,7 +1175,7 @@ export class ViewportComponent implements OnDestroy {
   private _syncWalls(
     walls: ReadonlyArray<IWallSegment>,
     selectedWallId: string | null = null,
-    openings: ReadonlyArray<import('@spacio/shared-types').IWallOpening> = []
+    openings: ReadonlyArray<import('@spacio/shared-types').IWallOpening> = [],
   ): void {
     if (!this._wallsGroup) return;
     this._disposeWallsGroup();
@@ -1080,7 +1200,10 @@ export class ViewportComponent implements OnDestroy {
     this._wallsGroup.clear();
   }
 
-  private _syncFurniture(furniture: ReadonlyArray<IPlacedFurniture>, selectedId: string | null): void {
+  private _syncFurniture(
+    furniture: ReadonlyArray<IPlacedFurniture>,
+    selectedId: string | null,
+  ): void {
     if (!this._furnitureGroup) return;
     this._disposeFurnitureSelectionOutlines();
     for (const instance of this._furnitureInstances.values()) {
@@ -1112,9 +1235,11 @@ export class ViewportComponent implements OnDestroy {
     if (!blueprint) return null;
     const materials: Record<string, import('@spacio/shared-types').IMaterialSlot> = {
       ...blueprint.materials,
-      ...(item.materialOverrides ?? {}),
     };
-    const group: THREE.Group = buildFurnitureMesh(blueprint.parts, materials, { ground: true });
+    const group: THREE.Group = buildFurnitureMesh(blueprint.parts, materials, {
+      ground: true,
+      partMaterialOverrides: item.materialOverrides,
+    });
     return {
       group,
       dispose: (): void => disposeFurnitureGroup(group),
@@ -1132,7 +1257,10 @@ export class ViewportComponent implements OnDestroy {
 
   private _addFurnitureSelectionOutline(group: THREE.Group, id: string): void {
     group.updateMatrixWorld(true);
-    const outline: THREE.BoxHelper = new THREE.BoxHelper(group, VIEWPORT_FURNITURE_SELECTION_OUTLINE_COLOR);
+    const outline: THREE.BoxHelper = new THREE.BoxHelper(
+      group,
+      VIEWPORT_FURNITURE_SELECTION_OUTLINE_COLOR,
+    );
     const outlineMaterial: THREE.LineBasicMaterial = outline.material as THREE.LineBasicMaterial;
     outlineMaterial.transparent = true;
     outlineMaterial.opacity = 0.9;
@@ -1153,10 +1281,17 @@ export class ViewportComponent implements OnDestroy {
     if (!this._furnitureGhost) {
       const posX: number = point?.x ?? 0;
       const posZ: number = point?.y ?? 0;
-      const group: THREE.Group = buildFurnitureMesh(blueprint.parts, blueprint.materials, { ground: true });
+      const group: THREE.Group = buildFurnitureMesh(blueprint.parts, blueprint.materials, {
+        ground: true,
+      });
       this._applyGhostMaterials(group);
-      const bounds: { width: number; height: number; depth: number } = getBlueprintBounds(blueprint.parts);
-      const footprint: IFurnitureFootprint = this._createFurnitureFootprint(bounds.width, bounds.depth);
+      const bounds: { width: number; height: number; depth: number } = getBlueprintBounds(
+        blueprint.parts,
+      );
+      const footprint: IFurnitureFootprint = this._createFurnitureFootprint(
+        bounds.width,
+        bounds.depth,
+      );
       const placementY: number = point?.placementY ?? this._getFurniturePlacementY();
       const ghostRotation: number = this._pendingFurnitureRotationY;
 
@@ -1191,35 +1326,43 @@ export class ViewportComponent implements OnDestroy {
   }
 
   private _applyGhostMaterials(group: THREE.Group): THREE.MeshStandardMaterial[] {
-    const materialCache: Map<THREE.Material, THREE.MeshStandardMaterial> = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+    const materialCache: Map<THREE.Material, THREE.MeshStandardMaterial> = new Map<
+      THREE.Material,
+      THREE.MeshStandardMaterial
+    >();
     const sourceMaterials: Set<THREE.Material> = new Set<THREE.Material>();
     const clonedMaterials: THREE.MeshStandardMaterial[] = [];
 
     group.traverse((obj: THREE.Object3D): void => {
       const mesh: THREE.Mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
-      const originalMaterial: THREE.Material | THREE.Material[] | undefined = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      const originalMaterial: THREE.Material | THREE.Material[] | undefined = mesh.material as
+        THREE.Material | THREE.Material[] | undefined;
       if (!originalMaterial) return;
 
       const isArray = Array.isArray(originalMaterial);
-      const sourceMaterialsForMesh: THREE.Material[] = isArray ? originalMaterial : [originalMaterial];
-      const clonedMaterialsForMesh: THREE.MeshStandardMaterial[] = sourceMaterialsForMesh.map((source: THREE.Material): THREE.MeshStandardMaterial => {
-        sourceMaterials.add(source);
-        const cachedMaterial: THREE.MeshStandardMaterial | undefined = materialCache.get(source);
-        if (cachedMaterial) return cachedMaterial;
+      const sourceMaterialsForMesh: THREE.Material[] = isArray
+        ? originalMaterial
+        : [originalMaterial];
+      const clonedMaterialsForMesh: THREE.MeshStandardMaterial[] = sourceMaterialsForMesh.map(
+        (source: THREE.Material): THREE.MeshStandardMaterial => {
+          sourceMaterials.add(source);
+          const cachedMaterial: THREE.MeshStandardMaterial | undefined = materialCache.get(source);
+          if (cachedMaterial) return cachedMaterial;
 
-        const standardMaterial: THREE.MeshStandardMaterial = source as THREE.MeshStandardMaterial;
-        const clonedMaterial: THREE.MeshStandardMaterial = standardMaterial.clone();
-        clonedMaterial.transparent = false;
-        clonedMaterial.opacity = FURNITURE_GHOST_MATERIAL_OPACITY;
-        clonedMaterial.depthWrite = true;
-        clonedMaterial.depthTest = true;
-        clonedMaterial.side = THREE.FrontSide;
-        clonedMaterial.needsUpdate = true;
-        materialCache.set(source, clonedMaterial);
-        clonedMaterials.push(clonedMaterial);
-        return clonedMaterial;
-      });
+          const standardMaterial: THREE.MeshStandardMaterial = source as THREE.MeshStandardMaterial;
+          const clonedMaterial: THREE.MeshStandardMaterial = standardMaterial.clone();
+          clonedMaterial.transparent = false;
+          clonedMaterial.opacity = FURNITURE_GHOST_MATERIAL_OPACITY;
+          clonedMaterial.depthWrite = true;
+          clonedMaterial.depthTest = true;
+          clonedMaterial.side = THREE.FrontSide;
+          clonedMaterial.needsUpdate = true;
+          materialCache.set(source, clonedMaterial);
+          clonedMaterials.push(clonedMaterial);
+          return clonedMaterial;
+        },
+      );
 
       mesh.material = isArray ? clonedMaterialsForMesh : clonedMaterialsForMesh[0];
       mesh.castShadow = false;
@@ -1428,7 +1571,8 @@ export class ViewportComponent implements OnDestroy {
 
       this._renderer.dispose();
       this._renderer.forceContextLoss();
-      const gl: WebGLRenderingContext | null = this._renderer.getContext() as WebGLRenderingContext | null;
+      const gl: WebGLRenderingContext | null =
+        this._renderer.getContext() as WebGLRenderingContext | null;
       if (gl) {
         const extension: WEBGL_lose_context | null = gl.getExtension(WEBGL_LOSE_CONTEXT_EXTENSION);
         extension?.loseContext();

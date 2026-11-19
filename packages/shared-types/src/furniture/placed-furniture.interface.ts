@@ -1,5 +1,5 @@
-import { IVector3D } from '../geometry/vector3d.interface';
-import { IMaterialSlot } from './material-slot.interface';
+import { IVector3D } from "../geometry/vector3d.interface";
+import { IFurniturePartMaterialOverride } from "./furniture-part.interface";
 
 export interface IPlacedFurniture {
   instanceId: string;
@@ -8,5 +8,5 @@ export interface IPlacedFurniture {
   position: IVector3D;
   rotationY: number;
   scale: IVector3D;
-  materialOverrides?: Record<string, IMaterialSlot>;
+  materialOverrides?: Record<string, IFurniturePartMaterialOverride>;
 }

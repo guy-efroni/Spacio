@@ -1,14 +1,6 @@
-﻿import {
-  Component,
-  Signal,
-  WritableSignal,
-  computed,
-  effect,
-  inject,
-  signal,
-} from '@angular/core';
+﻿import { Component, Signal, WritableSignal, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { DecimalPipe, TitleCasePipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { FloorplanService } from '../../core/services/floorplan.service';
 import { FurnitureCatalogService } from '../../core/services/furniture-catalog.service';
@@ -17,13 +9,16 @@ import {
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
   IFurnitureBlueprint,
-  IMaterialSlot,
+  IFurniturePartMaterialOverride,
   IPlacedFurniture,
   IWallMaterialSlot,
   IWallOpening,
   IWallSegment,
+  IMaterialPresetDefinition,
   MATERIAL_FINISH_OPTIONS,
   MATERIAL_FINISH_PRESETS,
+  MATERIAL_PRESET_IDS,
+  MATERIAL_PRESET_OPTIONS,
   MAX_OPENING_ELEVATION,
   MAX_OPENING_HEIGHT,
   MAX_OPENING_WIDTH,
@@ -36,21 +31,31 @@ import {
   MIN_WALL_PIER,
   MIN_WALL_THICKNESS,
   TMaterialFinish,
+  TMaterialPreset,
   WALL_COLOR_PRESETS,
   WallOpeningType,
   createDefaultOpeningMaterials,
   createDefaultOpeningStyleOptions,
+  getMaterialPresetSwatch,
 } from '@spacio/shared-types';
 
 type WallColorPreset = { readonly name: string; readonly value: string };
 
+interface IFurnitureMaterialEntry {
+  readonly key: string;
+  readonly label: string;
+  readonly color: string;
+  readonly materialPreset: TMaterialPreset;
+}
+
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const DEG_TO_RAD: number = Math.PI / 180;
 const RAD_TO_DEG: number = 180 / Math.PI;
 
 @Component({
   selector: 'app-property-inspector',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, TitleCasePipe],
+  imports: [FormsModule, DecimalPipe],
   templateUrl: './property-inspector.component.html',
   styleUrl: './property-inspector.component.scss',
 })
@@ -65,19 +70,27 @@ export class PropertyInspectorComponent {
     return this._floorplanService.walls().find((wall: IWallSegment) => wall.id === id) ?? null;
   });
 
-  public readonly selectedFurniture: Signal<IPlacedFurniture | null> = computed<IPlacedFurniture | null>(() => {
-    const id: string | null = this._floorplanService.selectedFurnitureId();
-    if (!id) return null;
-    return this._floorplanService.furniture().find((item: IPlacedFurniture): boolean => item.instanceId === id) ?? null;
-  });
+  public readonly selectedFurniture: Signal<IPlacedFurniture | null> =
+    computed<IPlacedFurniture | null>(() => {
+      const id: string | null = this._floorplanService.selectedFurnitureId();
+      if (!id) return null;
+      return (
+        this._floorplanService
+          .furniture()
+          .find((item: IPlacedFurniture): boolean => item.instanceId === id) ?? null
+      );
+    });
 
-  public readonly selectedBlueprint: Signal<IFurnitureBlueprint | null> = computed<IFurnitureBlueprint | null>(() => {
-    const item: IPlacedFurniture | null = this.selectedFurniture();
-    if (!item) return null;
-    return this._catalog.getById(item.blueprintId) ?? null;
-  });
+  public readonly selectedBlueprint: Signal<IFurnitureBlueprint | null> =
+    computed<IFurnitureBlueprint | null>(() => {
+      const item: IPlacedFurniture | null = this.selectedFurniture();
+      if (!item) return null;
+      return this._catalog.getById(item.blueprintId) ?? null;
+    });
 
-  public readonly selectionMode: Signal<'wall' | 'furniture' | 'none'> = computed<'wall' | 'furniture' | 'none'>(() => {
+  public readonly selectionMode: Signal<'wall' | 'furniture' | 'none'> = computed<
+    'wall' | 'furniture' | 'none'
+  >(() => {
     if (this.selectedFurniture()) return 'furniture';
     if (this.selectedWall()) return 'wall';
     return 'none';
@@ -118,11 +131,15 @@ export class PropertyInspectorComponent {
   public readonly heightStep: number = 0.1;
   public readonly thicknessStep: number = 0.05;
 
-  public readonly wallOpenings: Signal<readonly IWallOpening[]> = computed<readonly IWallOpening[]>(() => {
-    const id: string | null = this._floorplanService.selectedWallId();
-    if (!id) return [];
-    return this._floorplanService.openings().filter((opening: IWallOpening) => opening.wallId === id);
-  });
+  public readonly wallOpenings: Signal<readonly IWallOpening[]> = computed<readonly IWallOpening[]>(
+    () => {
+      const id: string | null = this._floorplanService.selectedWallId();
+      if (!id) return [];
+      return this._floorplanService
+        .openings()
+        .filter((opening: IWallOpening) => opening.wallId === id);
+    },
+  );
 
   public readonly minOpeningWidth: number = MIN_OPENING_WIDTH;
   public readonly maxOpeningWidth: number = MAX_OPENING_WIDTH;
@@ -138,8 +155,10 @@ export class PropertyInspectorComponent {
   public readonly furnitureScaleStep: number = 0.05;
   public readonly minFurnitureScale: number = 0.2;
   public readonly maxFurnitureScale: number = 5;
-  public readonly finishPresets: readonly { name: string; roughness: number; metalness: number }[] = MATERIAL_FINISH_PRESETS;
+  public readonly finishPresets: readonly { name: string; roughness: number; metalness: number }[] =
+    MATERIAL_FINISH_PRESETS;
   public readonly finishOptions: readonly TMaterialFinish[] = MATERIAL_FINISH_OPTIONS;
+  public readonly materialPresets: readonly IMaterialPresetDefinition[] = MATERIAL_PRESET_OPTIONS;
 
   public constructor() {
     effect((): void => {
@@ -200,52 +219,89 @@ export class PropertyInspectorComponent {
   }
 
   public openingBounds(opening: IWallOpening): OpeningPlacementBounds | null {
-    const otherOpenings: IWallOpening[] = this.wallOpenings().filter((item: IWallOpening) => item.id !== opening.id);
+    const otherOpenings: IWallOpening[] = this.wallOpenings().filter(
+      (item: IWallOpening) => item.id !== opening.id,
+    );
     return getOpeningPlacementBounds(opening, otherOpenings, this.wallLength());
   }
 
-  public openingMinPosition(_opening: IWallOpening): number { return MIN_WALL_PIER; }
-  public openingMaxPosition(opening: IWallOpening): number { return Math.max(MIN_WALL_PIER, this.wallLength() - MIN_WALL_PIER - opening.width); }
-  public openingMaxWidth(opening: IWallOpening): number { return this.openingBounds(opening)?.maxWidth ?? this.maxOpeningWidth; }
+  public openingMinPosition(_opening: IWallOpening): number {
+    return MIN_WALL_PIER;
+  }
+  public openingMaxPosition(opening: IWallOpening): number {
+    return Math.max(MIN_WALL_PIER, this.wallLength() - MIN_WALL_PIER - opening.width);
+  }
+  public openingMaxWidth(opening: IWallOpening): number {
+    return this.openingBounds(opening)?.maxWidth ?? this.maxOpeningWidth;
+  }
   public openingMaxHeight(opening: IWallOpening): number {
     const wall: IWallSegment | null = this.selectedWall();
     if (!wall) return this.maxOpeningHeight;
-    return Math.max(this.minOpeningHeight, Math.min(this.maxOpeningHeight, wall.height - opening.elevation));
+    return Math.max(
+      this.minOpeningHeight,
+      Math.min(this.maxOpeningHeight, wall.height - opening.elevation),
+    );
   }
   public openingMaxElevation(opening: IWallOpening): number {
     const wall: IWallSegment | null = this.selectedWall();
     if (!wall) return this.maxOpeningElevation;
-    return Math.max(this.minOpeningElevation, Math.min(this.maxOpeningElevation, wall.height - opening.height));
+    return Math.max(
+      this.minOpeningElevation,
+      Math.min(this.maxOpeningElevation, wall.height - opening.height),
+    );
   }
-  public formatOpeningValue(value: number): string { return Number.isFinite(value) ? value.toFixed(2) : '0.00'; }
-  public formatNum(value: number): string { return Number.isFinite(value) ? value.toFixed(2) : '0.00'; }
+  public formatOpeningValue(value: number): string {
+    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+  }
+  public formatNum(value: number): string {
+    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+  }
 
   public onOpeningPositionChange(id: string, value: number): void {
     if (!Number.isFinite(value)) return;
-    const opening: IWallOpening | undefined = this.wallOpenings().find((item: IWallOpening) => item.id === id);
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id,
+    );
     if (!opening) return;
-    this._floorplanService.updateOpening(id, { positionAlongWall: Math.min(this.openingMaxPosition(opening), Math.max(MIN_WALL_PIER, value)) });
+    this._floorplanService.updateOpening(id, {
+      positionAlongWall: Math.min(this.openingMaxPosition(opening), Math.max(MIN_WALL_PIER, value)),
+    });
   }
   public onOpeningWidthChange(id: string, value: number): void {
     if (!Number.isFinite(value)) return;
-    const opening: IWallOpening | undefined = this.wallOpenings().find((item: IWallOpening) => item.id === id);
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id,
+    );
     if (!opening) return;
     const bounds: OpeningPlacementBounds | null = this.openingBounds(opening);
     const minWidth: number = bounds?.minWidth ?? this.minOpeningWidth;
     const maxWidth: number = bounds?.maxWidth ?? this.maxOpeningWidth;
-    this._floorplanService.updateOpening(id, { width: Math.min(maxWidth, Math.max(minWidth, value)) });
+    this._floorplanService.updateOpening(id, {
+      width: Math.min(maxWidth, Math.max(minWidth, value)),
+    });
   }
   public onOpeningHeightChange(id: string, value: number): void {
     if (!Number.isFinite(value)) return;
-    const opening: IWallOpening | undefined = this.wallOpenings().find((item: IWallOpening) => item.id === id);
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id,
+    );
     if (!opening) return;
-    this._floorplanService.updateOpening(id, { height: Math.min(this.openingMaxHeight(opening), Math.max(this.minOpeningHeight, value)) });
+    this._floorplanService.updateOpening(id, {
+      height: Math.min(this.openingMaxHeight(opening), Math.max(this.minOpeningHeight, value)),
+    });
   }
   public onOpeningElevationChange(id: string, value: number): void {
     if (!Number.isFinite(value)) return;
-    const opening: IWallOpening | undefined = this.wallOpenings().find((item: IWallOpening) => item.id === id);
+    const opening: IWallOpening | undefined = this.wallOpenings().find(
+      (item: IWallOpening) => item.id === id,
+    );
     if (!opening) return;
-    this._floorplanService.updateOpening(id, { elevation: Math.min(this.openingMaxElevation(opening), Math.max(this.minOpeningElevation, value)) });
+    this._floorplanService.updateOpening(id, {
+      elevation: Math.min(
+        this.openingMaxElevation(opening),
+        Math.max(this.minOpeningElevation, value),
+      ),
+    });
   }
 
   public openingMaterials(opening: IWallOpening): Array<{ key: string; slot: IWallMaterialSlot }> {
@@ -263,23 +319,42 @@ export class PropertyInspectorComponent {
     if (!opening) return;
     const slot = (opening.materials ?? {})[slotKey];
     if (!slot) return;
-    this._floorplanService.updateOpening(openingId, { materials: { [slotKey]: { ...slot, color } } as Record<string, IWallMaterialSlot> });
+    this._floorplanService.updateOpening(openingId, {
+      materials: { [slotKey]: { ...slot, color } } as Record<string, IWallMaterialSlot>,
+    });
   }
 
-  public onOpeningMaterialFinishChange(openingId: string, slotKey: string, finishName: string): void {
+  public onOpeningMaterialFinishChange(
+    openingId: string,
+    slotKey: string,
+    finishName: string,
+  ): void {
     const opening = this.wallOpenings().find((o) => o.id === openingId);
     if (!opening) return;
     const slot: IWallMaterialSlot | undefined = (opening.materials ?? {})[slotKey];
     const preset = this.finishPresets.find((p) => p.name === finishName);
     if (!slot || !preset) return;
-    const finish: TMaterialFinish = preset.metalness >= 0.8 ? 'metallic' : preset.roughness <= 0.25 ? 'gloss' : preset.roughness >= 0.75 ? 'matte' : 'satin';
-    this._floorplanService.updateOpening(openingId, { materials: { [slotKey]: { ...slot, finish, roughness: preset.roughness, metalness: preset.metalness } } as Record<string, IWallMaterialSlot> });
+    const finish: TMaterialFinish =
+      preset.metalness >= 0.8
+        ? 'metallic'
+        : preset.roughness <= 0.25
+          ? 'gloss'
+          : preset.roughness >= 0.75
+            ? 'matte'
+            : 'satin';
+    this._floorplanService.updateOpening(openingId, {
+      materials: {
+        [slotKey]: { ...slot, finish, roughness: preset.roughness, metalness: preset.metalness },
+      } as Record<string, IWallMaterialSlot>,
+    });
   }
 
   public onOpeningStyleChange(openingId: string, styleKey: string, value: string): void {
     const opening = this.wallOpenings().find((o) => o.id === openingId);
     if (!opening) return;
-    this._floorplanService.updateOpening(openingId, { styleOptions: { ...(opening.styleOptions ?? {}), [styleKey]: value } });
+    this._floorplanService.updateOpening(openingId, {
+      styleOptions: { ...(opening.styleOptions ?? {}), [styleKey]: value },
+    });
   }
 
   public styleOptionsFor(key: string, categoryOrType: string): readonly string[] {
@@ -290,15 +365,19 @@ export class PropertyInspectorComponent {
     return [categoryOrType];
   }
 
-  public furnitureMaterialEntries(item: IPlacedFurniture): Array<{ key: string; slot: IMaterialSlot }> {
+  public furnitureMaterialEntries(item: IPlacedFurniture): IFurnitureMaterialEntry[] {
     const blueprint: IFurnitureBlueprint | null = this.selectedBlueprint();
-    const base: Record<string, IMaterialSlot> = blueprint?.materials ?? {};
-    const overrides: Record<string, IMaterialSlot> = item.materialOverrides ?? {};
-    const keys: string[] = [...new Set<string>([...Object.keys(base), ...Object.keys(overrides)])];
-    return keys.map((key: string): { key: string; slot: IMaterialSlot } => ({
-      key,
-      slot: { ...(base[key] ?? overrides[key]), ...(overrides[key] ?? {}) },
-    }));
+    if (!blueprint) return [];
+    const overrides: Record<string, IFurniturePartMaterialOverride> = item.materialOverrides ?? {};
+    return blueprint.parts.map((part): IFurnitureMaterialEntry => {
+      const override: IFurniturePartMaterialOverride | undefined = overrides[part.id];
+      return {
+        key: part.id,
+        label: part.name,
+        color: override?.color ?? part.color,
+        materialPreset: override?.materialPreset ?? part.materialPreset,
+      };
+    });
   }
 
   public furnitureRotationDegrees(item: IPlacedFurniture): number {
@@ -314,27 +393,52 @@ export class PropertyInspectorComponent {
   public onFurnitureScaleChange(axis: 'x' | 'y' | 'z', value: number): void {
     const item: IPlacedFurniture | null = this.selectedFurniture();
     if (!item || !Number.isFinite(value)) return;
-    const clamped: number = Math.min(this.maxFurnitureScale, Math.max(this.minFurnitureScale, value));
-    this._floorplanService.updateFurniture(item.instanceId, { scale: { ...item.scale, [axis]: clamped } });
+    const clamped: number = Math.min(
+      this.maxFurnitureScale,
+      Math.max(this.minFurnitureScale, value),
+    );
+    this._floorplanService.updateFurniture(item.instanceId, {
+      scale: { ...item.scale, [axis]: clamped },
+    });
   }
 
   public onFurnitureUniformScaleChange(value: number): void {
     const item: IPlacedFurniture | null = this.selectedFurniture();
     if (!item || !Number.isFinite(value)) return;
-    const clamped: number = Math.min(this.maxFurnitureScale, Math.max(this.minFurnitureScale, value));
-    this._floorplanService.updateFurniture(item.instanceId, { scale: { x: clamped, y: clamped, z: clamped } });
+    const clamped: number = Math.min(
+      this.maxFurnitureScale,
+      Math.max(this.minFurnitureScale, value),
+    );
+    this._floorplanService.updateFurniture(item.instanceId, {
+      scale: { x: clamped, y: clamped, z: clamped },
+    });
   }
 
   public uniformScale(item: IPlacedFurniture): number {
     return Number(((item.scale.x + item.scale.y + item.scale.z) / 3).toFixed(2));
   }
 
-  public onFurnitureMaterialColorChange(slotKey: string, color: string): void {
-    this._updateFurnitureOverride(slotKey, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, color }));
+  public onFurnitureMaterialColorChange(partId: string, color: string): void {
+    if (!HEX_COLOR_PATTERN.test(color)) return;
+    this._updateFurnitureOverride(
+      partId,
+      (override: IFurniturePartMaterialOverride): IFurniturePartMaterialOverride => ({
+        ...override,
+        color,
+      }),
+    );
   }
 
-  public onFurnitureMaterialFinishChange(slotKey: string, finish: TMaterialFinish): void {
-    this._updateFurnitureOverride(slotKey, (slot: IMaterialSlot): IMaterialSlot => ({ ...slot, finish }));
+  public onFurnitureMaterialPresetChange(partId: string, preset: TMaterialPreset): void {
+    if (!MATERIAL_PRESET_IDS.includes(preset)) return;
+    this._updateFurnitureOverride(
+      partId,
+      (override: IFurniturePartMaterialOverride): IFurniturePartMaterialOverride => ({
+        ...override,
+        materialPreset: preset,
+        color: getMaterialPresetSwatch(preset),
+      }),
+    );
   }
 
   public onEditInCraftRoom(): void {
@@ -343,16 +447,19 @@ export class PropertyInspectorComponent {
     void this._router.navigate(['/craft'], { queryParams: { edit: item.blueprintId } });
   }
 
-  private _updateFurnitureOverride(slotKey: string, mutator: (slot: IMaterialSlot) => IMaterialSlot): void {
+  private _updateFurnitureOverride(
+    partId: string,
+    mutator: (override: IFurniturePartMaterialOverride) => IFurniturePartMaterialOverride,
+  ): void {
     const item: IPlacedFurniture | null = this.selectedFurniture();
     if (!item) return;
-    const entries: ReadonlyArray<{ key: string; slot: IMaterialSlot }> = this.furnitureMaterialEntries(item);
-    const current: IMaterialSlot | undefined = entries.find((entry): boolean => entry.key === slotKey)?.slot;
-    if (!current) return;
+    const blueprint: IFurnitureBlueprint | null = this.selectedBlueprint();
+    if (!blueprint?.parts.some((part): boolean => part.id === partId)) return;
+    const current: IFurniturePartMaterialOverride | undefined = item.materialOverrides?.[partId];
     this._floorplanService.updateFurniture(item.instanceId, {
       materialOverrides: {
         ...(item.materialOverrides ?? {}),
-        [slotKey]: mutator(current),
+        [partId]: mutator(current ?? {}),
       },
     });
   }

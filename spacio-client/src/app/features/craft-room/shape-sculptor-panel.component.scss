@@ -1,0 +1,189 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sculptor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  border: 1px solid rgba(203, 182, 138, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(31, 33, 40, 0.96), rgba(17, 19, 24, 0.98));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(22px);
+  overflow: hidden;
+}
+
+.sculptor__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sculptor__eyebrow {
+  display: block;
+  color: #cbb68a;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sculptor__header h3 {
+  margin: 2px 0 0;
+  color: #f0eef0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sculptor__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #96969f;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sculptor__close:hover {
+  color: #f0e3ca;
+  border-color: rgba(203, 182, 138, 0.4);
+}
+
+.sculptor__modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.sculptor__mode {
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8e8e99;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sculptor__mode--active {
+  background: rgba(203, 182, 138, 0.18);
+  color: #f2e6cf;
+  box-shadow: inset 0 0 0 1px rgba(203, 182, 138, 0.26);
+}
+
+.sculptor__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sculptor__preset {
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #a9a9b3;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.sculptor__preset:hover {
+  border-color: rgba(203, 182, 138, 0.45);
+  color: #f0e3ca;
+}
+
+.sculptor__canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: #15171c;
+  overflow: hidden;
+}
+
+.sculptor__pad {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+}
+
+.sculptor__outline {
+  fill: rgba(203, 182, 138, 0.12);
+  stroke: #d8c39a;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.sculptor__point {
+  fill: #f4ead9;
+  stroke: #8c764e;
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.sculptor__point--smooth {
+  fill: #9db4d2;
+  stroke: #5f7899;
+}
+
+.sculptor__point:active {
+  cursor: grabbing;
+}
+
+.sculptor__midpoint {
+  fill: rgba(255, 255, 255, 0.42);
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1;
+  cursor: crosshair;
+}
+
+.sculptor__midpoint:hover {
+  fill: #cbb68a;
+}
+
+.sculptor__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  color: #777782;
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.sculptor__badge {
+  padding: 3px 6px;
+  border: 1px solid rgba(143, 179, 154, 0.35);
+  border-radius: 999px;
+  color: #9fc0aa;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
